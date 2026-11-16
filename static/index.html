@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iqra SmartClass Suite - Digital Board & Document Workspace</title>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Sans+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0284c7">
+
+<!-- Core Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+ 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="math-instruments.css">
+  <link rel="stylesheet" href="gallery-web.css" />
+</head>
+<body>
+  
+ 
+  <!-- SMART TOP FLOATING TEXT HEADER -->
+<div class="smart-top-text-bar hidden" id="textFormatBar">
+  <div class="top-bar-handle" title="Text Properties">
+    <i class="fa-solid fa-font"></i>
+  </div>
+
+  <!-- 1. Font Family Dropdown -->
+  <select id="fontFamilySelect" class="top-format-select" title="Font Style">
+    <option value="'Noto Nastaliq Urdu', serif">Urdu (Nastaliq)</option>
+    <option value="'Noto Sans Devanagari', sans-serif">Hindi</option>
+    <option value="'Amiri', serif">Arabic</option>
+    <option value="Arial" selected>Arial</option>
+    <option value="'Times New Roman', serif">Times New Roman</option>
+  </select>
+
+  <!-- 2. Font Size, Bold & Italic -->
+  <div class="top-control-group">
+    <input type="number" id="fontSizeInput" class="top-num-input" value="32" min="10" max="140" title="Font Size" />
+    <button class="tool-btn top-mini-btn" id="btnTextBold" title="Bold"><i class="fa-solid fa-bold"></i></button>
+    <button class="tool-btn top-mini-btn" id="btnTextItalic" title="Italic"><i class="fa-solid fa-italic"></i></button>
+  </div>
+
+  <div class="top-separator"></div>
+
+  <!-- 3. Direction LTR / RTL -->
+  <div class="top-control-group">
+    <button class="tool-btn top-mini-btn" id="btnDirLTR" title="Left to Right">LTR</button>
+    <button class="tool-btn top-mini-btn" id="btnDirRTL" title="Right to Left">RTL</button>
+  </div>
+
+  <div class="top-separator"></div>
+
+  <!-- 4. List Style Dropdown -->
+  <select id="listStyleSelect" class="top-format-select" title="Add List / Numbering">
+    <option value="">List Style...</option>
+    <option value="1">1. 2. 3. (Numbers)</option>
+    <option value="A">A. B. C. (Alphabets)</option>
+    <option value="i">i. ii. iii. (Roman)</option>
+    <option value="ur">۱. ۲. ۳. (Urdu)</option>
+    <option value="abjad">ا. ب. ج. (Abjad)</option>
+    <option value="bullet">Bullet</option>
+    <option value="arrow">Arrow</option>
+    <option value="check">Checkmark</option>
+  </select>
+
+  <!-- 5. Custom Font Upload & Symbols -->
+  <label for="customFontInput" class="top-action-btn" title="Install custom .ttf / .otf from PC">
+    <i class="fa-solid fa-file-arrow-up"></i> Font
+  </label>
+  <input type="file" id="customFontInput" accept=".ttf,.otf,.woff,.woff2" hidden />
+
+  <button class="tool-btn top-mini-btn" id="btnOpenSymbols" title="Insert Symbols">
+    <i class="fa-solid fa-icons"></i>
+  </button>
+
+  <div class="top-separator"></div>
+
+  <!-- 6. Virtual Keyboard Button -->
+  <button class="btn btn-secondary btn-sm top-keyboard-btn" id="btnToggleKeyboard" title="Open Virtual Keyboard">
+    <i class="fa-solid fa-keyboard"></i> Keyboard
+  </button>
+
+  <!-- 7. Minimize / Toggle Button -->
+  <button type="button" class="top-close-btn" id="btnCollapseTextBar" title="Hide Toolbar">
+    <i class="fa-solid fa-chevron-up"></i>
+  </button>
+</div>
+
+  <!-- WELCOME SCREEN: 3 SEC AUTO-DISMISS & TAP DISMISS -->
+  <div id="splashScreen" class="splash-screen" onclick="this.remove();" style="cursor:pointer;">
+    <div class="splash-card">
+      <div class="splash-icon"><i class="fa-solid fa-graduation-cap"></i></div>
+      <h1 class="splash-title">Iqra SmartClass Suite</h1>
+      <p class="splash-subtitle">Smart Digital Board & Document Workspace</p>
+      <span class="splash-dev">Developed by Sheikh Imran</span>
+      <div class="splash-loader"></div>
+      <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 14px;">Touch anywhere to enter</p>
+    </div>
+  </div>
+
+  <script>
+    setTimeout(function() {
+      var sp = document.getElementById("splashScreen");
+      if (sp) {
+        sp.style.transition = "opacity 0.4s ease";
+        sp.style.opacity = "0";
+        setTimeout(function() { sp.remove(); }, 400);
+      }
+    }, 3000);
+  </script>
+
+  <!-- TOP BAR -->
+  <header class="top-bar">
+    <div class="brand-group">
+      <div class="logo-box"><i class="fa-solid fa-graduation-cap"></i></div>
+      <div class="logo-text">
+        <h1>Iqra SmartClass Suite</h1>
+        <span class="creator-tag">Developed by Sheikh Imran</span>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <label for="fileInput" class="btn btn-primary" title="Select files to open">
+        <i class="fa-solid fa-cloud-arrow-up"></i> Upload Files
+      </label>
+
+      <button id="btnToggleAnnotate" class="btn btn-secondary" title="Draw directly over document">
+        <i class="fa-solid fa-pen-nib"></i> Draw on Doc: <span id="annotateStatus">OFF</span>
+      </button>
+
+      <button id="btnNewBoard" class="btn btn-secondary" title="Reset Right Board">
+        <i class="fa-solid fa-rotate-right"></i> Reset Board
+      </button>
+
+
+      <button id="btnFullScreen" class="btn btn-icon" title="Full Screen Window">
+        <i class="fa-solid fa-expand"></i>
+      </button>
+    </div>
+  </header>
+
+  <div id="btnToggleTopBar" class="topbar-toggle-handle" title="Collapse / Expand Top Bar">
+    <i class="fa-solid fa-chevron-up"></i>
+  </div>
+
+  <!-- APP SHELL -->
+  <div class="app-container">
+
+    <!-- SIDEBAR (Class Files) -->
+    <aside class="sidebar hidden" id="sidebar" style="display: none;">
+      <div class="sidebar-header">
+        <h3><i class="fa-solid fa-boxes-stacked"></i> Class Files (<span id="fileCount">0</span>)</h3>
+      </div>
+      <ul class="file-list" id="filePlaylist">
+        <li class="empty-state">No files loaded yet. Click "Upload Files" to begin.</li>
+      </ul>
+    </aside>
+
+    <!-- WORKSPACE -->
+    <main class="workspace" id="workspace">
+
+<!-- LEFT: DOCUMENT VIEWER (Startup par hidden rahega) -->
+<section class="pane document-pane" id="documentPane">
+  <div class="pane-header">
+    <span id="docTitle"><i class="fa-regular fa-file"></i> Ready for Document</span>
+    <div class="pane-controls">
+      <button id="btnToggleSidebar" class="btn-sm" title="Toggle File Manager"><i class="fa-solid fa-folder-tree"></i></button>
+      <button id="btnDocMinimize" class="btn-sm" title="Minimize to Whiteboard"><i class="fa-solid fa-minus"></i></button>
+      <button id="btnDocMaximize" class="btn-sm" title="Maximize Pane"><i class="fa-solid fa-maximize"></i></button>
+      <button id="btnDocClose" class="btn-sm text-red-500 hover:text-red-700 hover:bg-red-50" title="Close Document"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+  </div>
+  <div id="btnToggleDocHeader" class="pane-collapse-handle" title="Collapse / Expand Header"><i class="fa-solid fa-chevron-up"></i></div>
+
+        <div class="doc-viewport" id="docViewport">
+          <div class="drop-zone" id="dropZone">
+            <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+            <h3>Upload Lecture Materials</h3>
+            <p>PDF, Word, Excel, PPTX, or Images</p>
+          </div>
+
+          <div id="docContainer" class="doc-container hidden">
+            <div id="renderTarget" class="render-target"></div>
+            <canvas id="annotationCanvas" class="annotation-canvas hidden"></canvas>
+          </div>
+        </div>
+
+        <div id="sheetTabsBar" class="sheet-tabs-bar hidden"></div>
+
+        <div class="doc-footer" id="docFooter">
+          <div class="page-controls">
+            <button id="btnPrevPage" class="btn-sm" disabled><i class="fa-solid fa-chevron-left"></i> Prev</button>
+            <div class="page-input-wrapper">
+              <span>Page</span>
+              <input type="number" id="pageNumberInput" min="1" value="0" title="Type page number and press Enter" />
+              <span id="pageTotalText">/ 0</span>
+            </div>
+            <button id="btnNextPage" class="btn-sm" disabled>Next <i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+
+          <div class="doc-draw-tools" id="docDrawTools">
+            <button class="tool-btn active" id="btnDocPen" title="Pen"><i class="fa-solid fa-pen"></i></button>
+            <button class="tool-btn" id="btnDocHighlighter" title="Highlighter"><i class="fa-solid fa-highlighter"></i></button>
+            <button class="tool-btn" id="btnDocEraser" title="Clear Page Draw"><i class="fa-solid fa-eraser"></i></button>
+            <input type="color" id="docBrushColor" value="#dc2626" />
+          </div>
+
+          <div class="zoom-controls">
+            <button id="btnZoomOut" class="btn-sm"><i class="fa-solid fa-minus"></i></button>
+            <span id="zoomLevel">100%</span>
+            <button id="btnZoomIn" class="btn-sm"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+      
+      </section>
+      </section>
+
+      <!-- RESIZER (Startup par hidden) -->
+      <div class="resizer" id="resizer" style="display: none;"></div>
+
+      <!-- RIGHT: DIGITAL WHITEBOARD (100% Poori Screen) -->
+      <section class="pane whiteboard-pane" id="whiteboardPane" style="flex: 1 1 100%; width: 100%;">
+        
+        <div class="board-toolbar-wrapper" id="boardToolbarWrapper">
+          <div class="pane-header">
+            <span><i class="fa-solid fa-chalkboard"></i> Smart Teaching Whiteboard</span>
+            <div class="pane-controls">
+              <button id="btnToggleFullBoard" class="px-2 py-1 text-xs whitespace-nowrap bg-white border border-gray-300 rounded shadow-sm hover:bg-gray-50 flex items-center gap-1 cursor-pointer">
+                <i class="fas fa-expand text-[10px]"></i> Full Size
+              </button>
+            </div>
+          </div>
+
+          <!-- PRIMARY TOOLBAR -->
+         <!-- <div class="board-toolbar">
+           
+
+            <div class="tool-separator"></div>
+
+           
+
+
+
+            <div class="tool-separator"></div>
+
+           
+
+          </div> -->
+
+
+          <!-- COLLAPSIBLE HANDLE -->
+          <div class="toolbar-toggle-tab" id="toolbarToggleTab" title="Swipe / Click to Hide or Show Toolbar">
+            <i class="fa-solid fa-chevron-up" id="toolbarChevron"></i>
+          </div>
+        </div>
+
+        <div class="canvas-wrapper" id="canvasWrapper">
+          <canvas id="whiteboardCanvas"></canvas>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+ <!-- ========================================================
+     3-STAGE SMART TEACHING DOCK (CLEAN BASE)
+======================================================== -->
+<aside id="floatingDock" class="floating-dock state-hidden" aria-label="Smart Teaching Dock">
+  
+  <!-- Stage 1 & 2: Shutter Handle & Peek Strip -->
+  <div id="shutterWrapper" class="shutter-wrapper">
+    <div id="dockHandleTab" class="dock-handle-tab" title="Drag up to reveal tools">
+      <div class="drag-indicator"></div>
+    </div>
+    <div id="dockPeekStrip" class="dock-peek-strip">
+      <button id="btnDockExpand" class="dock-btn-expand" title="Expand Full Toolbar">
+        <i class="fa-solid fa-angles-up"></i>
+        <span>Tools</span>
+      </button>
+    </div>
+  </div>
+
+ <!-- Stage 3: Full Vertical Dock Panel -->
+  <div id="dockFullPanel" class="dock-full-panel">
+    
+    <!-- Drawer Pull Handle (Baayein taraf khinchne wala tab) -->
+    <div class="dock-drawer-handle" id="dockDrawerHandle" title="Pull to open toolkit">
+      <div class="drawer-handle-bar"></div>
+    </div>
+    <!-- Minimized Documents Tray Plate -->
+        <div id="minimizedDocsTray" class="minimized-docs-tray hidden" title="Click to Restore Minimized Document">
+          <i class="fa-solid fa-file-pdf"></i>
+          <span id="minimizedDocTitle">Document.pdf</span>
+        </div>
+
+    <!-- Sliding Drawer Panel (Clean Single Block) -->
+    <div class="dock-drawer-panel" id="dockDrawerPanel">
+      <div class="drawer-panel-inner">
+        <span class="drawer-panel-title">Toolkit</span>
+
+        <!-- Sirf Text Tool button rahega -->
+        <button class="tool-btn drawer-tool-btn" data-tool="text" title="Text Box">
+          <i class="fa-solid fa-font"></i>
+          <span class="tool-label">Text Tool</span>
+        </button>
+     
+        <!-- ========================================== -->
+        <!-- ACTION HUB: DOCUMENTS, GALLERY & WEB       -->
+        <!-- ========================================== -->
+
+    
+<!-- 1. Documents Upload -->
+<div class="tool-btn drawer-tool-btn" id="dockBtnUploadDocs" title="Upload Documents" style="position: relative; overflow: hidden; cursor: pointer;">
+  <i class="fa-solid fa-file-arrow-up"></i>
+  <span class="tool-label">Documents Upload</span>
+<input type="file" id="fileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" multiple style="position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;">
+</div>
+<!-- Insert Image Button -->
+<!-- Insert Image Button -->
+<div class="tool-btn drawer-tool-btn" id="dockBtnInsertImage" title="Insert Image" style="position: relative; overflow: hidden; cursor: pointer;">
+  <i class="fa-solid fa-image"></i>
+  <span class="tool-label">Insert Image</span>
+ <input type="file" id="boardImageFileInput" accept="image/*" multiple style="position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;">
+</div>
+        <!-- 2. Book Gallery -->
+        <button type="button" class="tool-btn drawer-tool-btn" id="dockBtnBookGallery" title="Islamic Book Gallery">
+          <i class="fa-solid fa-book-open"></i>
+          <span class="tool-label"> Islamic Books </span>
+        </button>
+        <!-- 3. Academic Book Gallery (Naya Button) -->
+<button type="button" class="tool-btn drawer-tool-btn" id="dockBtnAcademicGallery" title="Academic Book Gallery">
+  <i class="fa-solid fa-graduation-cap"></i>
+  <span class="tool-label">Academic Books</span>
+</button>
+
+     <!-- 4. Websites Integration -->
+        <button type="button" class="tool-btn drawer-tool-btn" id="dockBtnWebIntegration" title="Web Integration">
+          <i class="fa-solid fa-globe"></i>
+          <span class="tool-label">Web Integration</span>
+        </button>
+        <!-- 5. Educational Video Gallery -->
+<button type="button" class="tool-btn drawer-tool-btn" id="dockBtnVideoGallery" title="IqraVideo Gallery">
+  <i class="fa-solid fa-circle-play" style="color: #ef4444;"></i>
+  <span class="tool-label">Video Gallery</span>
+</button>
+        <!-- ========================================== -->
+
+      </div>
+    </div>
+
+    <!-- 1. Top Header Actions (-, x) -->
+    <div class="dock-panel-header">
+      <div class="dock-panel-actions">
+        <button class="dock-action-btn" id="btnDockMinimize" title="Minimize Dock">
+          <i class="fa-solid fa-minus"></i>
+        </button>
+        <button class="dock-action-btn dock-btn-close" id="btnDockClose" title="Close Dock">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+  <!-- 2. Primary Working Tools List -->
+    <div class="dock-tools-list" id="dockToolsList">
+
+      <!-- ======================================================== -->
+      <!-- 2-COLUMN DOCK TOOLS CONTAINER (NO LOGIC CHANGED)        -->
+      <!-- ======================================================== -->
+      <div class="dock-two-col-grid">
+
+
+<!-- ==================================================== -->
+        <!-- ROW 1: ACTIVE PEN TOGGLE (LEFT) + BACKGROUND (RIGHT) -->
+        <!-- ==================================================== -->
+        <button type="button" class="tool-btn dock-math-style active" id="btnToggleActivePenMode" title="Active Pen: ON (Stylus writes, Finger erases)" style="position: relative; background: #ecfdf5; border-color: #10b981; color: #059669;">
+          <i class="fa-solid fa-pen-nib"></i>
+          <span id="activePenStatusDot" style="position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span>
+        </button>
+
+<!-- Right side ka Layers wala button ya wrapper waisa hi rahega -->
+        <!-- Aapka Original BG Wrapper (Bina kisi tabdeeli ke) -->
+        <div class="bg-tool-wrapper" style="position: relative;">
+          <button class="tool-btn dock-math-style" id="btnBgSettings" title="Canvas Background">
+            <i class="fa-solid fa-layer-group"></i>
+          </button>
+
+          <!-- BACKGROUND POPUP MENU -->
+          <div id="bgSettingsPanel" class="bg-settings-panel hidden">
+            <div class="bg-panel-title">Board Background</div>
+            
+            <label class="bg-label">Pattern Type:</label>
+            <select id="boardBgSelect" class="bg-select-dropdown">
+              <optgroup label="Plain & Boards">
+                <option value="white">Plain White</option>
+                <option value="green">Chalkboard Green</option>
+                <option value="dark">Dark Board</option>
+                <option value="board-wooden">Wooden Frame Texture</option>
+                <option value="vintage-paper">Vintage Paper</option>
+              </optgroup>
+              
+              <optgroup label="English 4-Line">
+                <option value="fourline-standard">4-Line (Same Color)</option>
+                <option value="fourline-colored">4-Line (Red & Blue Rules)</option>
+              </optgroup>
+
+              <optgroup label="Ruled Lines (Urdu / Arabic / Normal)">
+                <option value="ruled-normal">Ruled (Normal Gap - 32px)</option>
+                <option value="ruled-wide">Ruled (Wide Gap - 50px)</option>
+                <option value="doubleline-wide">Double Line (Wide Teaching Gap)</option>
+              </optgroup>
+
+              <optgroup label="Math & Grid">
+                <option value="grid-small">Math Grid (Small)</option>
+                <option value="grid-large">Math Grid (Large)</option>
+                <option value="dotted">Dotted Grid</option>
+              </optgroup>
+            </select>
+
+            <div class="bg-color-row">
+              <label class="bg-label">Line / Pattern Color:</label>
+              <input type="color" id="bgPatternColor" value="#94a3b8" class="bg-color-input" title="Change Line Color">
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================================================== -->
+        <!-- ROW 2: Delete  -->
+        <!-- ==================================================== -->
+<!-- Row 1: Left me Delete, Right me Layers -->
+<button class="tool-btn dock-math-style" id="btnClearBoard" title="Clear Board">
+  <i class="fa-solid fa-trash-can"></i>
+</button>
+    
+       <!-- ==================================================== -->
+        <!-- ROW 3: Right side copy   -->
+        <!-- ==================================================== -->
+        <button class="tool-btn dock-math-style" data-tool="select" title="Select / Move / Resize">
+          <i class="fa-solid fa-arrow-pointer"></i>
+        </button>
+
+        <!-- ==================================================== -->
+        <!-- ROW 3:    -->
+        <!-- ==================================================== -->
+        <!-- Row 2: Left me 3D Interactive Globe Button -->
+<button class="tool-btn dock-math-style" id="btnOpenGlobe" title="3D Interactive Globe">
+  <i class="fa-solid fa-earth-americas" style="color: #0284c7;"></i>
+</button>
+        </button>
+<!-- Aapka Original Pen Suite (Bina kisi tabdeeli ke) -->
+        <div class="pen-suite-wrapper" id="penSuiteWrapper">
+
+          <!-- Main Pen Toolbar Button -->
+          <button type="button" id="penSuiteMainBtn" class="pen-suite-trigger-btn dock-math-style" title="Pen Tools & Styles">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+              <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+              <path d="M2 2l7.586 7.586"></path>
+              <circle cx="11" cy="11" r="2"></circle>
+            </svg>
+            <!-- Indicator dot jo current color dikhayega -->
+            <span id="penSuiteColorIndicator" class="pen-suite-color-dot"></span>
+          </button>
+
+          <!-- Pen Settings Flyout Popup Modal -->
+          <div id="penSuiteFlyout" class="pen-suite-flyout" style="display: none;">
+            
+            <!-- 1. Nib / Pen Types Selection -->
+            <div class="pen-suite-section">
+              <label class="pen-suite-label">Pen Style</label>
+              <div class="pen-suite-types-grid">
+                <button type="button" class="pen-type-btn active" data-pen-type="normal" title="Ballpoint / Fine Pen">
+                  <span class="pen-type-icon">●</span> Normal
+                </button>
+                <button type="button" class="pen-type-btn" data-pen-type="calligraphy-en" title="English Calligraphy (Chisel Nib 45°)">
+                  <span class="pen-type-icon">✒</span> Italic / English
+                </button>
+                <button type="button" class="pen-type-btn" data-pen-type="calligraphy-ur" title="Urdu / Arabic Khat (Qalam 70°)">
+                  <span class="pen-type-icon">ق</span> Urdu Qalam
+                </button>
+                <button type="button" class="pen-type-btn" data-pen-type="brush" title="Soft Artistic Brush">
+                  <span class="pen-type-icon">🖌</span> Brush
+                </button>
+                <button type="button" class="pen-type-btn" data-pen-type="highlighter" title="Highlighter / Marker">
+                  <span class="pen-type-icon">🖍</span> Highlighter
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. Thickness / Size Selection -->
+            <div class="pen-suite-section">
+              <div class="pen-suite-label-row">
+                <label class="pen-suite-label">Size</label>
+                <span id="penSuiteSizeDisplay" class="pen-suite-val-badge">4px</span>
+              </div>
+              <input type="range" id="penSuiteSizeSlider" min="1" max="50" value="4" class="pen-suite-slider">
+            </div>
+
+            <!-- 3. Integrated Color Palette -->
+            <div class="pen-suite-section">
+              <label class="pen-suite-label">Color</label>
+              <div class="pen-suite-colors-row">
+                <!-- Preset Swatches -->
+                <button type="button" class="pen-color-dot active" data-color="#1e293b" style="background:#1e293b;"></button>
+                <button type="button" class="pen-color-dot" data-color="#dc2626" style="background:#dc2626;"></button>
+                <button type="button" class="pen-color-dot" data-color="#2563eb" style="background:#2563eb;"></button>
+                <button type="button" class="pen-color-dot" data-color="#16a34a" style="background:#16a34a;"></button>
+                <button type="button" class="pen-color-dot" data-color="#ca8a04" style="background:#ca8a04;"></button>
+                <button type="button" class="pen-color-dot" data-color="#9333ea" style="background:#9333ea;"></button>
+
+                <!-- Custom Color Wheel Input -->
+                <label class="pen-color-custom-btn" title="Pick Any Custom Color">
+                  <input type="color" id="penSuiteCustomColorInput" value="#1e293b" style="opacity:0; width:0; height:0; position:absolute;">
+                  <span>🎨</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 4. Live Stroke Preview Line -->
+            <div class="pen-suite-preview-box">
+              <span class="pen-suite-preview-text">Preview:</span>
+              <div id="penSuiteLivePreview" class="pen-suite-preview-line"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ==================================================== -->
+        <!-- ROW 4: 3D Maps & Eraser                              -->
+        <!-- ==================================================== -->
+<button id="dockBtnMaps3D" class="dock-btn" title="Iqra 3D Maps & Geography Explorer" style="color: #0284c7; background: rgba(2, 132, 199, 0.12); border: 1.5px solid rgba(2, 132, 199, 0.35);">
+  <i class="fa-solid fa-map-location-dot" style="color: #0284c7;"></i>
+</button>
+        <button class="tool-btn dock-math-style" data-tool="eraser" title="Eraser">
+          <i class="fa-solid fa-eraser"></i>
+        </button>
+
+        <!-- ====================================================================== -->
+        <!-- ROW 5: QUICK COLOR PALETTE TRIGGER & Iqra 3D Solar System & Space Explorer                  -->
+        <!-- ====================================================================== -->
+<button id="dockBtnSolar3D" class="dock-btn" title="Iqra 3D Space Explorer" style="background: rgba(245, 158, 11, 0.14); border: 1.5px solid rgba(245, 158, 11, 0.42);">
+  <svg width="22" height="22" viewBox="0 0 32 32" style="display:block;">
+    <defs>
+      <radialGradient id="dockRealSunCorona" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#ffffff"/>
+        <stop offset="32%" stop-color="#fef08a"/>
+        <stop offset="62%" stop-color="#f59e0b"/>
+        <stop offset="85%" stop-color="#ea580c" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#ea580c" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="dockRealSunCore" cx="42%" cy="40%" r="58%">
+        <stop offset="0%" stop-color="#fffbeb"/>
+        <stop offset="45%" stop-color="#fbbf24"/>
+        <stop offset="85%" stop-color="#ea580c"/>
+        <stop offset="100%" stop-color="#b45309"/>
+      </radialGradient>
+    </defs>
+    <!-- Soft Solar Corona Glow -->
+    <circle cx="16" cy="16" r="15" fill="url(#dockRealSunCorona)"/>
+    <!-- Photosphere Sphere -->
+    <circle cx="16" cy="16" r="8.2" fill="url(#dockRealSunCore)"/>
+    <!-- Subtle Solar Granulation / Surface Spots -->
+    <circle cx="13.5" cy="14" r="1.1" fill="#fef3c7" opacity="0.55"/>
+    <circle cx="18.2" cy="17.5" r="0.9" fill="#9a3412" opacity="0.35"/>
+    <circle cx="15.8" cy="19.2" r="0.7" fill="#fef08a" opacity="0.45"/>
+  </svg>
+</button>
+        <div class="color-picker-wrapper dock-math-style" id="colorPickerWrapper">
+          <button type="button" id="colorTriggerBtn" class="color-trigger-circle" title="Change Color"></button>
+          
+          <div id="colorFlyoutMenu" class="color-flyout-container">
+            <button type="button" class="color-btn" data-color="#1e293b" style="background: #1e293b;"></button>
+            <button type="button" class="color-btn" data-color="#dc2626" style="background: #dc2626;"></button>
+            <button type="button" class="color-btn" data-color="#2563eb" style="background: #2563eb;"></button>
+            <button type="button" class="color-btn" data-color="#16a34a" style="background: #16a34a;"></button>
+            <button type="button" class="color-btn" data-color="#eab308" style="background: #eab308;"></button>
+            <label class="custom-color-label" title="Custom Color">
+              🎨
+              <input type="color" id="brushColor" value="#1e293b">
+            </label>
+          </div>
+        </div>
+        <!-- ==================================================== -->
+        <!-- ROW 6: AI HANDWRITING TO TEXT CONVERTER              -->
+        <!-- ==================================================== -->
+        <button type="button" class="tool-btn dock-math-style dummy-btn" title="Empty Slot 6">
+          <i class="fa-solid fa-plus text-slate-400"></i>
+        </button>
+        <button class="tool-btn dock-math-style" id="btnHwToText" title="Convert Handwriting to Text" onclick="convertHandwritingToText()">
+          <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i>
+        </button>
+
+        <!-- ==================================================== -->
+        <!-- ROW 7: SHAPES & GEOMETRY DRAWER                     -->
+        <!-- ==================================================== -->
+        <button type="button" class="tool-btn dock-math-style dummy-btn" title="Empty Slot 7">
+          <i class="fa-solid fa-plus text-slate-400"></i>
+        </button>
+        <div class="dock-tool-wrapper" id="shapesToolWrapper">
+          <button class="tool-btn master-shapes-btn dock-math-style" id="shapesMasterBtn" data-tool="shapes-menu" title="Shapes & Geometry">
+            <div class="shapes-grid-icon">
+              <span class="shape-dot circle"></span>
+              <span class="shape-dot square"></span>
+              <span class="shape-dot triangle"></span>
+              <span class="shape-dot arrow">&nearr;</span>
+            </div>
+          </button>
+          <div class="shapes-flyout-box hidden" id="shapesFlyoutBox">
+            <div class="shapes-flyout-header">
+              <span>Shapes & Lines</span>
+            </div>
+            <div class="shapes-grid">
+              <button class="tool-btn shape-option-btn" data-tool="line" title="Straight Line"><i class="fa-solid fa-minus"></i></button>
+              <button class="tool-btn shape-option-btn" data-tool="arrow" title="Arrow Pointer"><i class="fa-solid fa-arrow-right"></i></button>
+              <button class="tool-btn shape-option-btn" data-tool="rectangle" title="Rectangle / Square"><i class="fa-regular fa-square"></i></button>
+              <button class="tool-btn shape-option-btn" data-tool="circle" title="Circle"><i class="fa-regular fa-circle"></i></button>
+              <button class="tool-btn shape-option-btn" data-tool="triangle" title="Triangle"><i class="fa-solid fa-play" style="transform: rotate(-90deg); font-size: 11px;"></i></button>
+              <button class="tool-btn shape-option-btn" data-tool="star" title="Star Shape"><i class="fa-regular fa-star"></i></button>
+            </div>
+          </div>
+        </div>
+
+       <!-- ==================================================== -->
+        <!-- ROW 8: MATHEMATICAL INSTRUMENTS MASTER              -->
+        <!-- ==================================================== -->
+        <button type="button" class="tool-btn dock-math-style dummy-btn" title="Empty Slot 8">
+          <i class="fa-solid fa-plus text-slate-400"></i>
+        </button>
+        <div class="dock-tool-wrapper" id="mathInstrumentsWrapper">
+          <button class="tool-btn master-math-btn dock-math-style" id="mathMasterBtn" data-tool="math-menu" title="Mathematical Instruments">
+            <i class="fa-solid fa-compass-drafting"></i>
+          </button>
+          <div class="math-flyout-box hidden" id="mathFlyoutBox">
+            <div class="math-flyout-header">
+              <span>Math Instruments</span>
+              <button type="button" class="math-close-btn" id="mathCloseBtn" title="Close Panel">&times;</button>
+            </div>
+            <div class="math-section-title">Physical Apparatus</div>
+            <div class="math-tools-grid">
+              <button class="tool-btn math-tool-btn" data-math-tool="ruler" title="Digital Ruler"><i class="fa-solid fa-ruler"></i><span>Ruler</span></button>
+              <button class="tool-btn math-tool-btn" data-math-tool="protractor" title="Protractor"><i class="fa-solid fa-circle-notch"></i><span>Protractor</span></button>
+              <button class="tool-btn math-tool-btn" data-math-tool="compass" title="Compass"><i class="fa-solid fa-pen-fancy"></i><span>Compass</span></button>
+              <button class="tool-btn math-tool-btn" data-math-tool="setsquare" title="Set Square"><i class="fa-solid fa-draw-polygon"></i><span>Set Square</span></button>
+              <button class="tool-btn math-tool-btn" data-math-tool="divider" title="Divider"><i class="fa-solid fa-arrows-split-up-and-left"></i><span>Divider</span></button>
+            </div>
+            <div class="math-section-title">Geometric Constructions</div>
+            <div class="math-tools-grid">
+              <button class="tool-btn math-tool-btn" id="btnGeomAngle" title="Measure / Draw Angle"><i class="fa-solid fa-chart-pie"></i><span>Angle Bisector</span></button>
+              <button class="tool-btn math-tool-btn" id="btnGeomParallel" title="Draw Parallel Line"><i class="fa-solid fa-bars"></i><span>Parallel</span></button>
+              <button class="tool-btn math-tool-btn" data-geom-tool="length" onclick="activateGeomTool('length')" title="Measure Length"><i class="fa-solid fa-ruler-combined"></i><span>Length</span></button>
+              <button class="tool-btn math-tool-btn" data-geom-tool="midpoint" onclick="activateGeomTool('midpoint')" title="Find Midpoint"><i class="fa-solid fa-ellipsis"></i><span>Midpoint</span></button>
+              <button class="tool-btn math-tool-btn" id="btnGeomPerpendicular" data-math-tool="perpendicular" data-geom-tool="perpendicular" title="Draw Perpendicular Line (90°)" style="grid-column: span 2;"><i class="fa-solid fa-diagram-project" style="transform: rotate(180deg);"></i><span>Perpendicular (90°)</span></button>
+            </div>
+            <div class="math-active-controls hidden" id="mathActiveControls">
+              <button type="button" id="mathLockBtn" title="Lock/Unlock Position"><i class="fa-solid fa-lock"></i></button>
+              <button type="button" id="mathRemoveBtn" title="Remove Apparatus"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+        </div>
+        <!-- ==================================================== -->
+        <!-- ROW 9: SNIPPING & SCREENSHOT TOOL                   -->
+        <!-- ==================================================== -->
+        <button type="button" class="tool-btn dock-math-style dummy-btn" title="Empty Slot 9">
+          <i class="fa-solid fa-plus text-slate-400"></i>
+        </button>
+        <button class="tool-btn dock-math-style" id="btnSnippingTool" title="Snipping Tool (Area Screenshot)" onclick="activateSnippingTool()">
+          <i class="fa-solid fa-scissors"></i>
+        </button>
+
+
+        <!-- ==================================================== -->
+        <!-- ROW 11: EXPORT CANVAS (PNG DOWNLOAD)                -->
+        <!-- ==================================================== -->
+        <button type="button" class="tool-btn dock-math-style dummy-btn" title="Empty Slot 11">
+          <i class="fa-solid fa-plus text-slate-400"></i>
+        </button>
+        <button class="tool-btn dock-math-style" id="btnExportBoard" title="Export PNG">
+          <i class="fa-solid fa-download"></i>
+        </button>
+<!-- ROW 11: UNDO TOOL -->
+        <button type="button" class="tool-btn dock-math-style dummy-btn" title="Empty Slot 11">
+          <i class="fa-solid fa-plus text-slate-400"></i>
+        </button>
+        <button class="tool-btn dock-math-style" id="btnUndo" title="Undo">
+          <i class="fa-solid fa-rotate-left"></i>
+        </button>
+
+        <!-- ROW 12: REDO TOOL -->
+        <button type="button" class="tool-btn dock-math-style dummy-btn" title="Empty Slot 12">
+          <i class="fa-solid fa-plus text-slate-400"></i>
+        </button>
+        <button class="tool-btn dock-math-style" id="btnRedo" title="Redo">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+
+        </div>
+
+    </div> <!-- End #dockToolsList -->
+</aside>
+<!-- ========================================================
+     FLOATING MINIMIZED PDF BUBBLE (INDEPENDENT)
+     Start: Tareeqa No. 2 Floating Round Button
+======================================================== -->
+<div id="minimizedPdfBubble" class="minimized-pdf-bubble hidden" title="Click to Restore Document">
+  <i class="fa-solid fa-file-pdf"></i>
+</div>
+<!-- ========================================================
+     End: Floating Minimized PDF Bubble
+======================================================== -->
+
+
+<!-- ========================================== -->
+<!-- ORIGINAL VIRTUAL KEYBOARD CONTAINER & SYMBOLS MODAL       -->
+<!-- ========================================== -->
+
+ <!-- SYMBOLS MODAL -->
+<div id="symbolsModal" class="symbols-modal hidden">
+  <div class="sym-modal-header">
+    <div class="sym-tabs">
+  <button class="sym-tab-btn active" data-tab="islamic">Islamic</button>
+  <button class="sym-tab-btn" data-tab="academic">Math / Academic</button>
+  <button class="sym-tab-btn" data-tab="emojis">Emojis</button>
+  <button class="sym-tab-btn" data-tab="icons">Icons</button>
+</div>
+    <button id="btnCloseSymbols" class="sym-close-btn">&times;</button>
+  </div>
+  <div id="symbolsGrid" class="symbols-grid"></div>
+</div>
+<div id="virtualKeyboard" class="virtual-keyboard hidden">
+  <div class="keyboard-header">
+    <div class="kb-drag-handle">
+      <i class="fa-solid fa-grip-lines"></i>
+      <span>Virtual Keyboard</span>
+    </div>
+    <div class="kb-controls">
+      <div class="kb-lang-group">
+        <button type="button" class="kb-lang-btn active" data-lang="en">EN</button>
+        <button type="button" class="kb-lang-btn" data-lang="ur">اردو</button>
+        <button type="button" class="kb-lang-btn" data-lang="hi">हिंदी</button>
+      </div>
+      <button type="button" class="kb-close-btn" id="btnCloseKeyboard" title="Close Keyboard">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- SUGGESTIONS BAR -->
+  <div class="kb-suggestions" id="kbSuggestions" style="display: none;"></div>
+
+<!-- MAIN KEYS -->
+  <div class="keyboard-keys" id="keyboardKeys"></div>
+</div>
+
+<!-- ================= BOOK GALLERY MODAL ================= -->
+<div id="bookGalleryModal" class="book-gallery-modal hidden">
+  <div class="book-gallery-overlay" id="galleryOverlay"></div>
+  <div class="book-gallery-content">
+    
+    <!-- HEADER -->
+    <div class="book-gallery-header">
+      <div class="gallery-title">
+        <span class="icon">📚</span>
+        <h3>Iqra Digital Library</h3>
+      </div>
+
+      <!-- Total Books Badge -->
+      <div id="bookCountBadge" class="book-count-badge" title="Total Books">
+        <i class="fa-solid fa-book-open"></i>
+        <span id="bookCountText">0 Books</span>
+      </div>
+
+      <!-- Search Box (Sirf ek hi rahega) -->
+      <div class="book-search-box">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="bookSearchInput" placeholder="Kitab ka naam talash karein...">
+      </div>
+
+      <button id="closeBookGalleryBtn" class="close-gallery-btn">&times;</button>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="gallery-categories" id="galleryCategories"></div>
+
+<!-- Sub-categories / Languages -->
+    <div class="gallery-subcategories" id="galleryLanguages">
+      <button class="lang-tab active" data-lang="all">All Languages</button>
+      <button class="lang-tab" data-lang="Urdu">Urdu</button>
+      <button class="lang-tab" data-lang="Arabic">Arabic</button>
+      <button class="lang-tab" data-lang="English">English</button>
+      <button class="lang-tab" data-lang="Hindi">Hindi</button>
+    </div>
+
+    <!-- Books Grid Container -->
+    <div class="gallery-books-grid" id="galleryBooksGrid"></div>
+
+  </div>
+</div>
+<!-- ======================================================== -->
+<!-- IQRA WEB APP STORE / CIRCULAR GALLERY MODAL              -->
+<!-- ======================================================== -->
+<div id="webIntegrationModal" class="book-gallery-modal hidden">
+  <div class="gallery-overlay" id="webGalleryOverlay"></div>
+  <div class="gallery-container web-portal-container">
+    
+    <!-- Modal Header -->
+    <div class="gallery-header">
+      <div class="gallery-title">
+        <i class="fa-solid fa-compass" style="color: #38bdf8;"></i>
+        <span>Islamic Web Portals & Tools</span>
+      </div>
+      <button type="button" class="btn-close-gallery" id="closeWebGalleryBtn" title="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Search Bar & Custom URL -->
+    <div class="portal-toolbar">
+      <div class="portal-search-wrapper">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="webPortalSearchInput" placeholder="Website ya Tool talash karein (e.g. Fatwa, Quran, Tafseer)...">
+      </div>
+      <div class="portal-direct-url">
+        <input type="url" id="customWebUrlInput" placeholder="Direct URL paste karein...">
+        <button type="button" id="btnLoadCustomUrl">Go</button>
+      </div>
+    </div>
+
+    <!-- Category Tabs -->
+    <div class="gallery-tabs" id="webGalleryCategories">
+      <button type="button" class="category-tab active" data-cat="All">All</button>
+      <button type="button" class="category-tab" data-cat="Quran">Quran</button>
+      <button type="button" class="category-tab" data-cat="Hadith">Hadith</button>
+      <button type="button" class="category-tab" data-cat="Fatwa">Fatwa</button>
+      <button type="button" class="category-tab" data-cat="Academy">Academy</button>
+      <button type="button" class="category-tab" data-cat="Tools">Tools</button>
+    </div>
+
+    <!-- Circular App Icons Grid -->
+    <div class="gallery-body web-gallery-scroll">
+      <div class="web-circle-grid" id="webIntegrationGrid">
+        <!-- Gol round buttons JS se render honge -->
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Scripts hamesha sabse aakhri me rahenge -->
+<script src="touch-bridge.js"></script>
+<script src="words.js"></script>
+<script src="app.js"></script>
+<script src="math-ruler.js"></script>
+<script src="math-protractor.js"></script>
+<script src="math-compass.js"></script>
+<script src="math-setsquare.js"></script>
+<script src="math-divider.js"></script>
+<script src="math-construction-angle.js"></script>
+<script src="math-construction-parallel.js"></script>
+<script src="math-perpendicular.js"></script>
+<script src="book-gallery.js"></script>
+<script src="image-board-manager.js"></script>
+<script src="geom-measure-tools.js"></script>
+<script src="snipping-tool.js"></script>
+<script src="video-player.js"></script>
+<!-- 3D Satellite Earth Engine -->
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.x/dist/maplibre-gl.css" />
+<script src="https://unpkg.com/maplibre-gl@5.x/dist/maplibre-gl.js"></script>
+<script src="globe-tool.js"></script>
+<script src="eraser-tool.js"></script>
+<script src="pdf.js"></script>
+<script src="pen.js"></script>
+<script src="maps3d.js"></script>
+<script src="solar3d.js"></script>
+<script src="maps3d.js"></script>
+
+
+<script>
+  (function () {
+    const isInstalledApp =
+      window.matchMedia("(display-mode: fullscreen)").matches ||
+      window.matchMedia("(display-mode: standalone)").matches;
+
+    if (!isInstalledApp) return;
+
+    function goFullScreenOnce() {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+      document.removeEventListener("pointerdown", goFullScreenOnce);
+    }
+
+    // Jaise hi installed app par pehla click/touch hoga, upar wali patti gayab ho jayegi
+    document.addEventListener("pointerdown", goFullScreenOnce, { once: true });
+  })();
+</script>
+<script src="welcome-splash.js"></script>
+</body>
+</html>

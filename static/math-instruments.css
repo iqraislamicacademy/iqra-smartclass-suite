@@ -1,0 +1,897 @@
+/* ======================================================== */
+/* 1. MASTER TOOLBAR BUTTON & FLYOUT                        */
+/* ======================================================== */
+#mathMasterBtn.tool-btn {
+  width: 38px !important;
+  height: 38px !important;
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06) !important;
+  margin: 4px auto !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+#mathMasterBtn.tool-btn i {
+  font-size: 16px !important;
+  color: #334155 !important;
+}
+
+#mathMasterBtn.tool-btn:hover {
+  background: #f0fdf4 !important;
+  border-color: #16a34a !important;
+}
+#mathMasterBtn.tool-btn:hover i {
+  color: #16a34a !important;
+}
+
+#mathMasterBtn.tool-btn.active {
+  background: #dcfce7 !important;
+  border-color: #16a34a !important;
+}
+#mathMasterBtn.tool-btn.active i {
+  color: #15803d !important;
+}
+
+/* ======================================================== */
+/* 1. COMPACT & ANIMATED MATH FLYOUT PANEL                  */
+/* ======================================================== */
+.math-flyout-box {
+  position: absolute;
+  right: 68px;
+  top: 50%;
+  transform: translateY(-50%) scale(0.96);
+  width: 205px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+  padding: 8px 10px;
+  z-index: 99999;
+  box-sizing: border-box;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.18s ease,
+              visibility 0.18s ease;
+}
+
+.math-flyout-box:not(.hidden) {
+  transform: translateY(-50%) scale(1);
+  opacity: 1;
+  visibility: visible;
+}
+
+.math-flyout-box.hidden {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) scale(0.92);
+  pointer-events: none;
+}
+
+.math-flyout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 5px;
+  margin-bottom: 6px;
+}
+
+.math-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  color: #94a3b8;
+  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+}
+
+.math-close-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+  transform: rotate(90deg);
+}
+
+.math-section-title {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  margin: 5px 0 4px 2px;
+}
+
+.math-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+}
+
+.math-tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 42px; /* Height 52px se ghatakar 42px kar di */
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 3px;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.math-tool-btn i {
+  font-size: 13px;
+  color: #0284c7;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.math-tool-btn span {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.math-tool-btn:hover {
+  background: #f0f9ff;
+  border-color: #38bdf8;
+  color: #0369a1;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(2, 132, 199, 0.14);
+}
+
+.math-tool-btn:hover i {
+  transform: scale(1.15);
+}
+
+.math-tool-btn:active {
+  transform: translateY(0px) scale(0.96);
+}
+
+.math-tool-btn.active {
+  background: #e0f2fe;
+  border-color: #0284c7;
+}
+
+/* ======================================================== */
+/* 2. MATHEMATICAL RULER WIDGET (SLEEK ACRYLIC & PENCIL)    */
+/* ======================================================== */
+.math-apparatus-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 850;
+  overflow: hidden;
+}
+
+/* Semi-transparent crystal clear body */
+.real-math-ruler {
+  position: absolute;
+  height: 56px;
+  background: rgba(240, 249, 255, 0.48);
+  border: 1.5px solid rgba(2, 132, 199, 0.7);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  pointer-events: auto;
+  user-select: none;
+  touch-action: none;
+  transform-origin: 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+/* Custom Pencil Cursor for Top & Bottom Drawing Edges */
+.ruler-draw-pencil-edge {
+  width: 100%;
+  height: 12px;
+  background: rgba(2, 132, 199, 0.08);
+  position: relative;
+  z-index: 10;
+  /* Inline SVG Pencil Cursor */
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%230284c7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>') 2 20, crosshair;
+}
+
+.ruler-top-edge {
+  margin-top: -2px;
+  border-bottom: 1px solid rgba(2, 132, 199, 0.35);
+}
+
+.ruler-bottom-edge {
+  margin-bottom: -2px;
+  border-top: 1px solid rgba(2, 132, 199, 0.35);
+}
+
+.ruler-draw-pencil-edge:hover {
+  background: rgba(2, 132, 199, 0.20);
+}
+
+/* Center Movement Area */
+.ruler-center-body {
+  width: 100%;
+  height: 32px;
+  cursor: grab;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ruler-center-body:active {
+  cursor: grabbing;
+}
+
+
+/* Sleek Red Floating Close Pin (Exact Center Fixed) */
+.ruler-floating-close-pin {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 22px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease, background 0.15s ease;
+  z-index: 30;
+  box-sizing: border-box;
+}
+
+.ruler-floating-close-pin:hover {
+  background: #dc2626;
+  transform: translateX(-50%) scale(1.15);
+}
+/* Integrated End Gripper for Resize */
+.ruler-right-gripper {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  background: rgba(2, 132, 199, 0.2);
+  border-left: 1px dashed rgba(2, 132, 199, 0.6);
+  border-radius: 0 3px 3px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 15;
+}
+
+.ruler-right-gripper::after {
+  content: "⋮";
+  font-size: 13px;
+  color: #0284c7;
+  font-weight: bold;
+}
+
+.ruler-right-gripper:hover {
+  background: rgba(2, 132, 199, 0.4);
+}
+
+/* Rotate Dial at end */
+.ruler-rotate-dial {
+  position: absolute;
+  right: -32px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  background: #ffffff;
+  border: 1.5px solid #0284c7;
+  color: #0284c7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  font-size: 11px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  z-index: 20;
+}
+
+.ruler-rotate-dial:active {
+  cursor: grabbing;
+  background: #0284c7;
+  color: #ffffff;
+}
+
+/* Live Badge */
+.ruler-live-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #0284c7;
+  padding: 2px 10px;
+  border-radius: 12px;
+  display: none;
+  z-index: 30;
+  pointer-events: none;
+}
+/* ======================================================== */
+/* PROTRACTOR WIDGET: INTERACTIVE ARM & SECTOR ARCHITECTURE */
+/* ======================================================== */
+.real-math-protractor {
+  position: absolute;
+  background: rgba(240, 249, 255, 0.45);
+  border: 1.5px solid rgba(2, 132, 199, 0.7);
+  border-bottom: 2px solid #0284c7;
+  border-radius: 2000px 2000px 4px 4px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  pointer-events: auto;
+  user-select: none;
+  touch-action: none;
+  transform-origin: center bottom;
+  box-sizing: border-box;
+}
+
+/* Center Body Drag Area */
+.protractor-drag-body {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  top: 40px;
+  bottom: 0;
+  cursor: grab;
+  z-index: 10;
+}
+
+.protractor-drag-body:active {
+  cursor: grabbing;
+}
+
+/* Markaz (Center Origin Dot) */
+.protractor-center-origin {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  background: #ef4444;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  cursor: default;
+  z-index: 30;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+/* Rotate Dial */
+.protractor-rotate-dial {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26px;
+  height: 26px;
+  background: #ffffff;
+  border: 1.5px solid #0284c7;
+  color: #0284c7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  font-size: 11px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  z-index: 35;
+}
+
+.protractor-rotate-dial:active {
+  cursor: grabbing;
+  background: #0284c7;
+  color: #ffffff;
+}
+
+/* Resize Pin */
+.protractor-resize-pin {
+  position: absolute;
+  right: -12px;
+  bottom: -12px;
+  width: 24px;
+  height: 24px;
+  background: #0f766e;
+  color: #ffffff;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: nwse-resize;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  font-size: 11px;
+  z-index: 35;
+}
+
+/* Close Pin */
+.protractor-close-pin {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  width: 22px;
+  height: 22px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 35;
+}
+
+.protractor-close-pin:hover {
+  background: #dc2626;
+  transform: scale(1.15);
+}
+
+/* Angle Needle Drag Handle */
+.protractor-arm-handle {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: #f97316;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  cursor: grab;
+  z-index: 40;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.6);
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.protractor-arm-handle:active {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.protractor-arm-handle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: #ffffff;
+  border-radius: 50%;
+}
+
+/* Draw Angle Action Button (Inside Protractor) */
+.protractor-draw-action-btn {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0284c7;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
+  z-index: 30;
+  transition: all 0.15s ease;
+}
+
+.protractor-draw-action-btn:hover {
+  background: #0369a1;
+  transform: translateX(-50%) scale(1.05);
+}
+
+/* Big Live Angle Badge */
+.protractor-angle-badge {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 800;
+  color: #0369a1;
+  background: #ffffff;
+  border: 1px solid #bae6fd;
+  padding: 2px 10px;
+  border-radius: 12px;
+  z-index: 30;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+/* ======================================================== */
+/* 4. COMPASS APPARATUS (SOLID VISIBILITY & CONTROLS FIX)    */
+/* ======================================================== */
+.real-math-compass {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  touch-action: none;
+  z-index: 860;
+  box-sizing: border-box;
+}
+
+/* Floating Controls (Close, Scale, Radius) */
+.compass-close-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 60;
+  pointer-events: auto;
+}
+
+.compass-close-pin:hover {
+  background: #dc2626;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.compass-scale-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  background: #0f766e;
+  color: #ffffff;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: nwse-resize;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 55;
+  pointer-events: auto;
+}
+
+.compass-radius-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369a1;
+  background: #ffffff;
+  border: 1px solid #bae6fd;
+  padding: 2px 8px;
+  border-radius: 12px;
+  z-index: 55;
+  white-space: nowrap;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+}
+
+.compass-interactive-el {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.compass-interactive-el:active {
+  cursor: grabbing;
+}
+/* ======================================================== */
+/* 5. SET SQUARE (CLEAN ACRYLIC TRIANGLE SCALE)             */
+/* ======================================================== */
+.real-math-setsquare {
+  position: absolute;
+  pointer-events: auto;
+  user-select: none;
+  touch-action: none;
+  z-index: 840;
+  box-sizing: border-box;
+  transform-origin: 0 0;
+}
+
+/* Floating Red Close Pin - Shifted to inner cutout */
+.setsquare-close-pin {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 60;
+  transform: translate(-50%, -50%);
+}
+
+.setsquare-close-pin:hover {
+  background: #dc2626;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+/* Rotate Dial */
+.setsquare-rotate-dial {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 24px;
+  background: #ffffff;
+  border: 1.5px solid #0284c7;
+  color: #0284c7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  font-size: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  z-index: 55;
+}
+
+.setsquare-rotate-dial:active {
+  cursor: grabbing;
+  background: #0284c7;
+  color: #ffffff;
+}
+
+/* Scale Resize Pin - Shifted to inner cutout near slanted edge */
+.setsquare-scale-pin {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: #0f766e;
+  color: #ffffff;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: nwse-resize;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 55;
+  transform: translate(-50%, -50%);
+}
+
+.setsquare-scale-pin:hover {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+/* Live Length Badge */
+.setsquare-live-badge {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369a1;
+  background: #ffffff;
+  border: 1px solid #bae6fd;
+  padding: 2px 8px;
+  border-radius: 12px;
+  z-index: 55;
+  white-space: nowrap;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+  display: none;
+  transform: translate(-50%, -50%);
+}
+
+.setsquare-svg-body {
+  cursor: grab;
+  pointer-events: fill;
+}
+
+.setsquare-svg-body:active {
+  cursor: grabbing;
+}
+
+.setsquare-edge-draw-path {
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%230284c7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>') 2 22, crosshair !important;
+  pointer-events: stroke;
+}
+/* ======================================================== */
+/* 6. DIVIDER APPARATUS (SOLID DUAL-NEEDLE VISIBILITY FIX)  */
+/* ======================================================== */
+.real-math-divider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  touch-action: none;
+  z-index: 850;
+  box-sizing: border-box;
+}
+
+/* Floating Controls (Close, Scale, Distance Badge) */
+.divider-close-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  font-family: Arial, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 60;
+  pointer-events: auto;
+}
+
+.divider-close-pin:hover {
+  background: #dc2626;
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.divider-scale-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  background: #0f766e;
+  color: #ffffff;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: nwse-resize;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  z-index: 55;
+  pointer-events: auto;
+}
+
+.divider-distance-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369a1;
+  background: #ffffff;
+  border: 1px solid #bae6fd;
+  padding: 2px 8px;
+  border-radius: 12px;
+  z-index: 55;
+  white-space: nowrap;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+}
+
+.divider-interactive-el {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.divider-interactive-el:active {
+  cursor: grabbing;
+}
+/* ======================================================== */
+/* 7. GEOMETRIC CONSTRUCTIONS - INTERACTIVE UI GUIDE        */
+/* ======================================================== */
+.construction-guide-toast {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  padding: 8px 18px;
+  border-radius: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  z-index: 999;
+  pointer-events: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.construction-guide-toast span.step-pill {
+  background: #0284c7;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.construction-guide-toast button.cancel-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.construction-guide-toast button.cancel-btn:hover {
+  color: #ef4444;
+}
+
+.construction-ghost-point {
+  pointer-events: none;
+}
