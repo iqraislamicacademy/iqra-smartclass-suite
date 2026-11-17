@@ -2799,29 +2799,43 @@ aside.dock-panel,
 }
 
 /* ==========================================================================
-   2-COLUMN GRID - PROFESSIONAL UNIFORM GAP & SPACING
+   2-COLUMN GRID - RESPONSIVE UNIFORM GAP & SPACING (PC + MOBILE)
    ========================================================================== */
+#dockToolsList,
+.dock-tools-list {
+  max-height: calc(100vh - 82px) !important;
+  overflow-y: auto !important;
+  overflow-x: visible !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#dockToolsList::-webkit-scrollbar,
+.dock-tools-list::-webkit-scrollbar {
+  display: none !important;
+}
+
 .dock-two-col-grid {
   display: grid !important;
-  grid-template-columns: 32px 32px !important;
-  grid-auto-rows: 32px !important;
-  row-gap: 5px !important;            /* Sabhi 12 rows ke darmiyan barabar 5px gap */
-  column-gap: 6px !important;
+  grid-template-columns: 30px 30px !important;
+  grid-auto-rows: 30px !important;
+  row-gap: 4px !important;
+  column-gap: 5px !important;
   justify-content: center !important;
   align-items: center !important;
-  padding: 4px 0 !important;
+  padding: 3px 0 !important;
   margin: 0 auto !important;
   box-sizing: border-box !important;
 }
 
-/* Har button ko shrink (dabne) se rokein */
 .dock-two-col-grid > * {
-  width: 32px !important;
-  height: 32px !important;
+  width: 30px !important;
+  height: 30px !important;
   flex-shrink: 0 !important;
   margin: 0 !important;
   box-sizing: border-box !important;
 }
+
 /* ==========================================================================
    SECTION 3: BASE BUTTON DESIGN & UNIFORM LOOK
    ========================================================================== */
@@ -2829,12 +2843,12 @@ aside.dock-panel,
 #btnUndo,
 #btnRedo,
 .dock-two-col-grid button {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  min-height: 32px !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
   border: 1.5px solid #cbd5e1 !important;
-  border-radius: 9px !important;
+  border-radius: 8px !important;
   background: #ffffff !important;
   display: flex !important;
   align-items: center !important;
@@ -2846,7 +2860,7 @@ aside.dock-panel,
   margin: 0 !important;
   box-sizing: border-box !important;
   color: #334155 !important;
-  font-size: 13px !important;
+  font-size: 12.5px !important;
 }
 
 .dock-math-style:hover,
@@ -2883,86 +2897,64 @@ aside.dock-panel,
 .dock-two-col-grid .dock-tool-wrapper,
 .dock-two-col-grid .bg-tool-wrapper,
 .dock-two-col-grid .pen-suite-wrapper,
-.dock-two-col-grid .color-picker-wrapper {
+.dock-two-col-grid .color-picker-wrapper,
+#shapesToolWrapper,
+#mathInstrumentsWrapper,
+.dock-two-col-grid #shapesToolWrapper,
+.dock-two-col-grid #mathInstrumentsWrapper,
+#colorPickerWrapper {
   position: relative !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 32px !important;
-  height: 32px !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
   margin: 0 !important;
   padding: 0 !important;
+  box-sizing: border-box !important;
 }
 
-/* Dropdown menus ko wrapper ke relative bahar khulne dein */
+#shapesMasterBtn,
+#mathMasterBtn,
+button.master-shapes-btn,
+button.master-math-btn {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
 .dock-tool-wrapper > .dropdown-menu,
 .dock-tool-wrapper > .dock-popup-menu,
-.pen-suite-wrapper > .dock-popup-menu {
+.pen-suite-wrapper > .dock-popup-menu,
+#shapesFlyoutBox,
+#mathFlyoutBox {
   position: absolute !important;
-  right: 40px !important;
+  right: 38px !important;
   top: 0 !important;
   width: auto !important;
   height: auto !important;
+  z-index: 10000 !important;
 }
 
 .pen-suite-trigger-btn svg {
   display: block !important;
   margin: auto !important;
 }
-/* ==========================================================================
-   EXACT RESIZE & ALIGNMENT: SHAPES & MATH WRAPPERS & BUTTONS
-   ========================================================================== */
 
-/* 1. In dono ke wrapper divs ko exact 32x32px mein lock karein */
-#shapesToolWrapper,
-#mathInstrumentsWrapper,
-.dock-two-col-grid #shapesToolWrapper,
-.dock-two-col-grid #mathInstrumentsWrapper {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  min-height: 32px !important;
-  max-width: 32px !important;
-  max-height: 32px !important;
-  position: relative !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  box-sizing: border-box !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-/* 2. Main buttons ko baaqi tools ke barabar 32x32px banayein */
-#shapesMasterBtn,
-#mathMasterBtn,
-button.master-shapes-btn,
-button.master-math-btn {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px !important;
-  min-height: 32px !important;
-  max-width: 32px !important;
-  max-height: 32px !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border-radius: 9px !important;
-  box-sizing: border-box !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-/* 3. Flyout menus ko grid ke flow se bahar (absolute) rakhein taaki wo row ko na dabayein */
-#shapesFlyoutBox,
-#mathFlyoutBox {
-  position: absolute !important;
-  right: 44px !important;
-  top: 0 !important;
-  z-index: 10000 !important;
-}
-
-/* 4. Shapes icon (4 dots grid) ko compact karein */
 .shapes-grid-icon {
   width: 14px !important;
   height: 14px !important;
@@ -2981,10 +2973,52 @@ button.master-math-btn {
   line-height: 1 !important;
 }
 
-/* 5. Math compass icon ka size standard karein */
 #mathMasterBtn i {
-  font-size: 13px !important;
+  font-size: 12.5px !important;
   line-height: 1 !important;
+}
+
+/* ==========================================================================
+   MOBILE LANDSCAPE / CHHOTI SCREEN COMPACT & SCROLLABLE OVERRIDE
+   ========================================================================== */
+@media (max-height: 550px), (max-width: 920px) {
+  #dockToolsList,
+  .dock-tools-list {
+    max-height: calc(100vh - 56px) !important;
+  }
+
+  .dock-two-col-grid {
+    grid-template-columns: 25px 25px !important;
+    grid-auto-rows: 25px !important;
+    row-gap: 3px !important;
+    column-gap: 4px !important;
+  }
+
+  .dock-two-col-grid > *,
+  .dock-math-style,
+  #btnUndo,
+  #btnRedo,
+  .dock-two-col-grid button,
+  .dock-two-col-grid .dock-tool-wrapper,
+  .dock-two-col-grid .bg-tool-wrapper,
+  .dock-two-col-grid .pen-suite-wrapper,
+  .dock-two-col-grid .color-picker-wrapper,
+  #shapesToolWrapper,
+  #mathInstrumentsWrapper,
+  #colorPickerWrapper,
+  #shapesMasterBtn,
+  #mathMasterBtn,
+  button.master-shapes-btn,
+  button.master-math-btn {
+    width: 25px !important;
+    height: 25px !important;
+    min-width: 25px !important;
+    min-height: 25px !important;
+    max-width: 25px !important;
+    max-height: 25px !important;
+    font-size: 11px !important;
+    border-radius: 7px !important;
+  }
 }
 /* ==========================================================================
    COLOR PICKER BUTTON & FLYOUT FIX
@@ -3264,3 +3298,4 @@ div[class*="zoom"] button,
   pointer-events: auto !important;
   cursor: pointer !important;
 }
+
