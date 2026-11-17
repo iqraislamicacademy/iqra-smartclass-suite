@@ -344,11 +344,17 @@
           <i class="fa-solid fa-globe"></i>
           <span class="tool-label">Web Integration</span>
         </button>
-        <!-- 5. Educational Video Gallery -->
-<button type="button" class="tool-btn drawer-tool-btn" id="dockBtnVideoGallery" title="IqraVideo Gallery">
-  <i class="fa-solid fa-circle-play" style="color: #ef4444;"></i>
-  <span class="tool-label">Video Gallery</span>
-</button>
+<!-- 5. Educational Video Gallery -->
+        <button type="button" class="tool-btn drawer-tool-btn" id="dockBtnVideoGallery" title="IqraVideo Gallery">
+          <i class="fa-solid fa-circle-play" style="color: #ef4444;"></i>
+          <span class="tool-label">Video Gallery</span>
+        </button>
+
+        <!-- 6. Wireless Tablet / Mobile Sync -->
+        <button type="button" class="tool-btn drawer-tool-btn" id="dockBtnTabletSync" title="Connect Tablet / Mobile to Write Live">
+          <i class="fa-solid fa-tablet-screen-button" style="color: #0284c7;"></i>
+          <span class="tool-label">Tablet Sync</span>
+        </button>
         <!-- ========================================== -->
 
       </div>
@@ -899,5 +905,8 @@
   })();
 </script>
 <script src="welcome-splash.js"></script>
+<!-- PeerJS (Free WebRTC) + Iqra Tablet Sync Module -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="tablet-sync.js"></script>
 </body>
 </html>
