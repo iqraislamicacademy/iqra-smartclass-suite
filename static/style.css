@@ -3299,3 +3299,38 @@ div[class*="zoom"] button,
   cursor: pointer !important;
 }
 
+/* ==========================================================================
+   CLEAN FLYOUT STYLING (Pen, Shapes & Math Instruments)
+   ========================================================================== */
+#dockToolsList,
+.dock-tools-list {
+  overflow: visible !important;
+}
+
+#penSuiteFlyout,
+.pen-suite-flyout,
+#shapesFlyoutBox,
+.shapes-flyout-box,
+#mathFlyoutBox,
+.math-flyout-box {
+  position: fixed !important;
+  top: 50% !important;
+  bottom: auto !important;
+  right: 112px !important;
+  left: auto !important;
+  transform: translateY(-50%) !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16) !important;
+  padding: 14px !important;
+  max-height: 86vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  z-index: 2147483647 !important;
+}
+
+#mathFlyoutBox,
+.math-flyout-box {
+  width: 245px !important;
+}
