@@ -1,7 +1,7 @@
 /* ==========================================================================
-   IQRA ISLAMIC ACADEMY - LIVE CLASSROOM & BROADCAST SUITE
-   (Full-Viewport Mode, Draggable Translucent Wall Handle, Real-Time Video
-    Filters, 10 Live Voice Modulators, Host Moderation & Two-Way Chat)
+   IQRA ISLAMIC ACADEMY - HOST STUDIO & LIVE BROADCAST CONTROLLER
+   (Secure class.html Links, 12 Age/Gender Voice Filters, Video Shapes & Filters,
+    Spotlight Stage Control, Separate Audio/Video Locks, Kick & Dual Exit)
    ========================================================================== */
 (function () {
   const ACADEMY_NAME = "Iqra Islamic Academy";
@@ -29,13 +29,15 @@
   let selectedMicId = "";
   let selectedCamId = "";
   let selectedVideoFilter = "none";
+  let selectedVideoShape = "rounded";
   let selectedVoicePreset = "natural";
+  let spotlightTargetId = "host"; // "host" or student peerId
 
   let isMicMuted = false;
   let isCamOff = false;
   let isWallMinimized = false;
   let isFullSizePanel = false;
-  let activeHostTab = "participants"; // "participants" | "chat"
+  let activeHostTab = "participants";
   let isHostSidePanelOpen = true;
   let unreadMessages = 0;
 
@@ -53,25 +55,40 @@
     { id: "bw", label: "Black & White Classic", css: "grayscale(1) contrast(1.18)" }
   ];
 
-  const VOICE_PRESETS = [
-    { id: "natural", label: "1. Natural Voice (Original)" },
-    { id: "deep-bass", label: "2. Deep Bass (Heavy Authority)" },
-    { id: "crisp-lecture", label: "3. Crisp Lecture (Clear Vocal)" },
-    { id: "warm-podcast", label: "4. Warm Radio / Podcast" },
-    { id: "baritone", label: "5. Low Baritone (Deep Pitch)" },
-    { id: "youthful", label: "6. Higher Pitch (Lighter Tone)" },
-    { id: "bright-soft", label: "7. Soft Bright (High Tone)" },
-    { id: "hall-echo", label: "8. Grand Hall / Masjid Reverb" },
-    { id: "megaphone", label: "9. Classroom PA / Megaphone" },
-    { id: "robotic", label: "10. Digital Modulator" }
+  const VIDEO_SHAPES = [
+    { id: "rounded", label: "Rounded Square" },
+    { id: "circle", label: "Circle (Round)" },
+    { id: "heart", label: "Heart Shape" },
+    { id: "hexagon", label: "Hexagon Frame" },
+    { id: "oval", label: "Soft Oval" },
+    { id: "rect", label: "Full Rectangle" }
   ];
 
-  function getBaseAppUrl() {
-    let baseUrl = window.location.href.split("?")[0];
-    if (baseUrl.includes("127.0.0.1") || baseUrl.includes("localhost")) {
-      baseUrl = "https://iqra-smartclass-suite.onrender.com/index.html";
+  // Exact 12 Age & Gender Voice Filters + Natural Default
+  const VOICE_PRESETS = [
+    { id: "natural", label: "0. Natural Voice (Original)" },
+    { id: "baby-6", label: "1. 6 Year Baby" },
+    { id: "boy-10", label: "2. 10 Year Boy" },
+    { id: "boy-15", label: "3. 15 Year Boy" },
+    { id: "boy-22", label: "4. 22 Year Boy" },
+    { id: "man-50", label: "5. 50 Year Old Man" },
+    { id: "man-60", label: "6. 60 Year Old Man" },
+    { id: "fbaby-6", label: "7. 6 Year Female Baby" },
+    { id: "girl-10", label: "8. 10 Year Girl" },
+    { id: "girl-15", label: "9. 15 Year Girl" },
+    { id: "girl-22", label: "10. 22 Year Girl" },
+    { id: "woman-50", label: "11. 50 Year Old Woman" },
+    { id: "woman-60", label: "12. 60 Year Old Woman" }
+  ];
+
+  // Build clean student classroom URL without index.html (points to lightweight class.html)
+  function getStudentClassUrl(slug) {
+    const loc = window.location;
+    if (loc.hostname === "127.0.0.1" || loc.hostname === "localhost") {
+      const baseDir = loc.href.substring(0, loc.href.lastIndexOf("/") + 1);
+      return `${baseDir}class.html?room=${encodeURIComponent(slug)}`;
     }
-    return baseUrl;
+    return `${loc.origin}/class.html?room=${encodeURIComponent(slug)}`;
   }
 
   function sanitizeRoomSlug(raw) {
@@ -111,7 +128,36 @@
     return palette[Math.abs(hash) % palette.length];
   }
 
-  // Real-time Web Audio Voice Processor (10 Voice Presets)
+  function getShapeCssStyle(shapeId) {
+    if (shapeId === "circle") {
+      return "border-radius: 50%; aspect-ratio: 1 / 1; max-width: 85%; max-height: 85%;";
+    }
+    if (shapeId === "heart") {
+      return "aspect-ratio: 1 / 1; max-width: 86%; max-height: 86%; clip-path: polygon(50% 92%, 12% 58%, 4% 35%, 14% 14%, 32% 8%, 50% 22%, 68% 8%, 86% 14%, 96% 35%, 88% 58%);";
+    }
+    if (shapeId === "hexagon") {
+      return "aspect-ratio: 1 / 1; max-width: 86%; max-height: 86%; clip-path: polygon(25% 5%, 75% 5%, 98% 50%, 75% 95%, 25% 95%, 2% 50%);";
+    }
+    if (shapeId === "oval") {
+      return "border-radius: 50%; width: 88%; height: 86%;";
+    }
+    if (shapeId === "rect") {
+      return "border-radius: 0px; width: 100%; height: 100%;";
+    }
+    return "border-radius: 16px; width: 100%; height: 100%;";
+  }
+
+  function applyShapeToHostStage() {
+    const box = document.getElementById("iqraHostStageFrame");
+    if (!box) return;
+    box.style.cssText = `
+      overflow: hidden; display: flex; align-items: center; justify-content: center;
+      background: #000000; position: relative; transition: all 0.25s ease;
+      ${getShapeCssStyle(selectedVideoShape)}
+    `;
+  }
+
+  // Real-time Web Audio Pitch & Formant Processor for the 12 Age & Gender Voices
   function buildProcessedAudioTrack(inputMicStream, presetId) {
     if (!inputMicStream || !inputMicStream.getAudioTracks().length) return null;
 
@@ -127,101 +173,104 @@
     const source = audioCtx.createMediaStreamSource(inputMicStream);
     audioDestNode = audioCtx.createMediaStreamDestination();
 
+    // Formant & EQ sculpting filters
+    const highpass = audioCtx.createBiquadFilter();
+    highpass.type = "highpass";
+    highpass.frequency.value = 60;
+
+    const formant1 = audioCtx.createBiquadFilter();
+    formant1.type = "peaking";
+    formant1.frequency.value = 1000;
+    formant1.Q.value = 1.4;
+    formant1.gain.value = 0;
+
+    const formant2 = audioCtx.createBiquadFilter();
+    formant2.type = "peaking";
+    formant2.frequency.value = 2600;
+    formant2.Q.value = 1.5;
+    formant2.gain.value = 0;
+
     const lowShelf = audioCtx.createBiquadFilter();
     lowShelf.type = "lowshelf";
-    lowShelf.frequency.value = 220;
-
-    const midPeak = audioCtx.createBiquadFilter();
-    midPeak.type = "peaking";
-    midPeak.frequency.value = 1400;
-    midPeak.Q.value = 1.2;
+    lowShelf.frequency.value = 240;
+    lowShelf.gain.value = 0;
 
     const highShelf = audioCtx.createBiquadFilter();
     highShelf.type = "highshelf";
-    highShelf.frequency.value = 3600;
-
-    const compressor = audioCtx.createDynamicsCompressor();
-    compressor.threshold.value = -20;
-    compressor.ratio.value = 4;
-
-    // Default neutral gains
-    lowShelf.gain.value = 0;
-    midPeak.gain.value = 0;
+    highShelf.frequency.value = 3800;
     highShelf.gain.value = 0;
 
-    let finalNode = compressor;
+    // Granular real-time pitch shifter via ScriptProcessor for true pitch ratio change
+    let pitchFactor = 1.0;
 
-    if (presetId === "deep-bass") {
-      lowShelf.gain.value = 14;
-      midPeak.gain.value = -3;
-      highShelf.gain.value = -4;
-    } else if (presetId === "crisp-lecture") {
-      lowShelf.gain.value = -4;
-      midPeak.gain.value = 6;
-      highShelf.gain.value = 9;
-    } else if (presetId === "warm-podcast") {
-      lowShelf.gain.value = 9;
-      midPeak.gain.value = 2;
-      highShelf.gain.value = 5;
-    } else if (presetId === "baritone") {
-      lowShelf.frequency.value = 300;
-      lowShelf.gain.value = 18;
-      midPeak.gain.value = -6;
-      highShelf.gain.value = -9;
-    } else if (presetId === "youthful") {
-      lowShelf.gain.value = -14;
-      midPeak.frequency.value = 2200;
-      midPeak.gain.value = 9;
-      highShelf.gain.value = 8;
-    } else if (presetId === "bright-soft") {
-      lowShelf.gain.value = -16;
-      midPeak.frequency.value = 2600;
-      midPeak.gain.value = 11;
-      highShelf.gain.value = 12;
-    } else if (presetId === "hall-echo") {
-      const delay = audioCtx.createDelay();
-      delay.delayTime.value = 0.16;
-      const feedback = audioCtx.createGain();
-      feedback.gain.value = 0.32;
-      const wetGain = audioCtx.createGain();
-      wetGain.gain.value = 0.45;
+    const presets = {
+      "natural": { pitch: 1.0, hp: 60, low: 0, f1Freq: 1000, f1Gain: 0, f2Freq: 2600, f2Gain: 0, high: 0 },
+      "baby-6": { pitch: 1.52, hp: 220, low: -18, f1Freq: 1650, f1Gain: 9, f2Freq: 3400, f2Gain: 12, high: 10 },
+      "boy-10": { pitch: 1.32, hp: 160, low: -12, f1Freq: 1400, f1Gain: 7, f2Freq: 3000, f2Gain: 8, high: 6 },
+      "boy-15": { pitch: 1.12, hp: 110, low: -4, f1Freq: 1150, f1Gain: 4, f2Freq: 2700, f2Gain: 5, high: 4 },
+      "boy-22": { pitch: 0.96, hp: 75, low: 6, f1Freq: 950, f1Gain: 3, f2Freq: 2400, f2Gain: 4, high: 3 },
+      "man-50": { pitch: 0.85, hp: 65, low: 12, f1Freq: 800, f1Gain: 4, f2Freq: 2100, f2Gain: -3, high: -4 },
+      "man-60": { pitch: 0.78, hp: 60, low: 15, f1Freq: 720, f1Gain: 5, f2Freq: 1900, f2Gain: -6, high: -7 },
+      "fbaby-6": { pitch: 1.62, hp: 240, low: -20, f1Freq: 1800, f1Gain: 11, f2Freq: 3600, f2Gain: 14, high: 12 },
+      "girl-10": { pitch: 1.42, hp: 185, low: -15, f1Freq: 1550, f1Gain: 9, f2Freq: 3300, f2Gain: 11, high: 9 },
+      "girl-15": { pitch: 1.28, hp: 160, low: -12, f1Freq: 1420, f1Gain: 8, f2Freq: 3100, f2Gain: 10, high: 8 },
+      "girl-22": { pitch: 1.22, hp: 145, low: -10, f1Freq: 1350, f1Gain: 7, f2Freq: 2950, f2Gain: 9, high: 8 },
+      "woman-50": { pitch: 1.10, hp: 120, low: -5, f1Freq: 1200, f1Gain: 5, f2Freq: 2650, f2Gain: 4, high: 3 },
+      "woman-60": { pitch: 1.03, hp: 110, low: -2, f1Freq: 1100, f1Gain: 4, f2Freq: 2400, f2Gain: 1, high: -2 }
+    };
 
-      compressor.connect(delay);
-      delay.connect(feedback);
-      feedback.connect(delay);
-      delay.connect(wetGain);
-      wetGain.connect(audioDestNode);
-    } else if (presetId === "megaphone") {
-      const bandpass = audioCtx.createBiquadFilter();
-      bandpass.type = "bandpass";
-      bandpass.frequency.value = 1500;
-      bandpass.Q.value = 1.8;
-      compressor.connect(bandpass);
-      finalNode = bandpass;
-    } else if (presetId === "robotic") {
-      const osc = audioCtx.createOscillator();
-      osc.type = "sawtooth";
-      osc.frequency.value = 48;
-      const ringGain = audioCtx.createGain();
-      ringGain.gain.value = 0.0;
-      osc.connect(ringGain.gain);
-      osc.start();
-      compressor.connect(ringGain);
-      finalNode = ringGain;
+    const cfg = presets[presetId] || presets.natural;
+    pitchFactor = cfg.pitch;
+    highpass.frequency.value = cfg.hp;
+    lowShelf.gain.value = cfg.low;
+    formant1.frequency.value = cfg.f1Freq;
+    formant1.gain.value = cfg.f1Gain;
+    formant2.frequency.value = cfg.f2Freq;
+    formant2.gain.value = cfg.f2Gain;
+    highShelf.gain.value = cfg.high;
+
+    source.connect(highpass);
+    highpass.connect(lowShelf);
+    lowShelf.connect(formant1);
+    formant1.connect(formant2);
+    formant2.connect(highShelf);
+
+    if (Math.abs(pitchFactor - 1.0) > 0.01 && typeof audioCtx.createScriptProcessor === "function") {
+      const bufSize = 2048;
+      const ringSize = bufSize * 4;
+      const ring = new Float32Array(ringSize);
+      let writePos = 0;
+      let readPos = 0;
+
+      const shifter = audioCtx.createScriptProcessor(bufSize, 1, 1);
+      shifter.onaudioprocess = (e) => {
+        const inp = e.inputBuffer.getChannelData(0);
+        const out = e.outputBuffer.getChannelData(0);
+        for (let i = 0; i < inp.length; i++) {
+          ring[writePos] = inp[i];
+          writePos = (writePos + 1) % ringSize;
+        }
+        for (let i = 0; i < out.length; i++) {
+          const idx0 = Math.floor(readPos) % ringSize;
+          const idx1 = (idx0 + 1) % ringSize;
+          const frac = readPos - Math.floor(readPos);
+          out[i] = ring[idx0] * (1 - frac) + ring[idx1] * frac;
+          readPos += pitchFactor;
+          if (readPos >= ringSize) readPos -= ringSize;
+        }
+      };
+      highShelf.connect(shifter);
+      shifter.connect(audioDestNode);
+    } else {
+      highShelf.connect(audioDestNode);
     }
-
-    source.connect(lowShelf);
-    lowShelf.connect(midPeak);
-    midPeak.connect(highShelf);
-    highShelf.connect(compressor);
-    finalNode.connect(audioDestNode);
 
     const outTrack = audioDestNode.stream.getAudioTracks()[0];
     if (outTrack) outTrack.enabled = !isMicMuted;
     return outTrack;
   }
 
-  // Real-time Filtered Video Stream (so students also see the selected Video Filter)
+  // Real-time Filtered Video Stream
   function buildFilteredVideoStream(inputCamStream, filterId) {
     if (videoFilterLoopId) {
       cancelAnimationFrame(videoFilterLoopId);
@@ -265,21 +314,28 @@
     return filteredStream;
   }
 
-  // Build active broadcast stream (Screen/Board OR Filtered Camera + Processed Voice)
+  // Build active broadcast stream (Spotlight Student OR Board Share OR Host Camera + Processed Audio)
   function getActiveBroadcastStream() {
     const combined = new MediaStream();
 
-    const boardStream =
-      (localScreenStream && localScreenStream.active)
-        ? localScreenStream
-        : (canvasFallbackStream && canvasFallbackStream.active)
-          ? canvasFallbackStream
-          : null;
+    if (spotlightTargetId !== "host") {
+      const spotStudent = connectedStudents.get(spotlightTargetId);
+      if (spotStudent && spotStudent.incomingStream) {
+        spotStudent.incomingStream.getVideoTracks().forEach((t) => combined.addTrack(t));
+      }
+    } else {
+      const boardStream =
+        (localScreenStream && localScreenStream.active)
+          ? localScreenStream
+          : (canvasFallbackStream && canvasFallbackStream.active)
+            ? canvasFallbackStream
+            : null;
 
-    if (boardStream) {
-      boardStream.getVideoTracks().forEach((t) => combined.addTrack(t));
-    } else if (processedVideoStream && processedVideoStream.active) {
-      processedVideoStream.getVideoTracks().forEach((t) => combined.addTrack(t));
+      if (boardStream) {
+        boardStream.getVideoTracks().forEach((t) => combined.addTrack(t));
+      } else if (processedVideoStream && processedVideoStream.active) {
+        processedVideoStream.getVideoTracks().forEach((t) => combined.addTrack(t));
+      }
     }
 
     if (processedAudioStream && processedAudioStream.active) {
@@ -289,7 +345,6 @@
     return combined.getTracks().length > 0 ? combined : null;
   }
 
-  // Universal Board Canvas Capture Stream (Works on EVERY Android Mobile & Tablet Browser)
   function createUniversalBoardCanvasStream() {
     if (canvasBroadcastTimer) clearInterval(canvasBroadcastTimer);
 
@@ -454,26 +509,52 @@
     });
   }
 
+  // Render Host Students List with Spotlight Pin, Separate Mic/Cam Locks, Mute, Cam Off & Kick
   function renderHostParticipantsList() {
     const listEl = document.getElementById("iqraHostParticipantsList");
     if (!listEl) return;
 
-    if (connectedStudents.size === 0) {
-      listEl.innerHTML = `
-        <div style="text-align: center; color: #64748b; font-size: 12px; padding: 28px 12px;">
-          <i class="fa-solid fa-users" style="font-size: 22px; margin-bottom: 8px; display: block; color: #334155;"></i>
-          No students have joined yet. Share the invite link to begin.
-        </div>
+    listEl.innerHTML = "";
+
+    // Spotlight Return Banner if a student is currently pinned to main stage
+    if (spotlightTargetId !== "host") {
+      const banner = document.createElement("div");
+      banner.style.cssText = `
+        background: #0c4a6e; border: 1px solid #0284c7; border-radius: 10px;
+        padding: 7px 9px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;
       `;
+      banner.innerHTML = `
+        <span style="font-size: 11px; font-weight: 700; color: #e0f2fe;">Student on Main Stage</span>
+        <button id="btnResetHostSpotlight" type="button" style="background: #0284c7; color: #fff; border: none; border-radius: 6px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; cursor: pointer;">
+          Show Host
+        </button>
+      `;
+      listEl.appendChild(banner);
+      document.getElementById("btnResetHostSpotlight").onclick = () => {
+        spotlightTargetId = "host";
+        refreshHostStagePreview();
+        broadcastStreamToAllStudents();
+        renderHostParticipantsList();
+      };
+    }
+
+    if (connectedStudents.size === 0) {
+      const empty = document.createElement("div");
+      empty.style.cssText = "text-align: center; color: #64748b; font-size: 12px; padding: 26px 12px;";
+      empty.innerHTML = `
+        <i class="fa-solid fa-users" style="font-size: 22px; margin-bottom: 8px; display: block; color: #334155;"></i>
+        No students have joined yet. Share the classroom link to begin.
+      `;
+      listEl.appendChild(empty);
       return;
     }
 
-    listEl.innerHTML = "";
     connectedStudents.forEach((student, pid) => {
       const card = document.createElement("div");
+      const isSpotlighted = spotlightTargetId === pid;
       card.style.cssText = `
-        background: #1e293b; border: 1px solid #334155; border-radius: 12px;
-        padding: 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 7px;
+        background: #1e293b; border: 1.5px solid ${isSpotlighted ? "#38bdf8" : "#334155"}; border-radius: 12px;
+        padding: 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px;
       `;
 
       const initials = getInitials(student.name);
@@ -481,12 +562,12 @@
       const hasLiveVideo = student.camOn && student.incomingStream && student.incomingStream.getVideoTracks().length > 0;
 
       card.innerHTML = `
-        <div style="position: relative; width: 100%; height: 92px; border-radius: 9px; background: #0f172a; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 100%; height: 90px; border-radius: 9px; background: #0f172a; overflow: hidden; display: flex; align-items: center; justify-content: center;">
           <video id="hostStudentVid_${pid}" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; display: ${hasLiveVideo ? "block" : "none"};"></video>
-          <div style="display: ${hasLiveVideo ? "none" : "flex"}; width: 46px; height: 46px; border-radius: 50%; background: ${bg}; color: #ffffff; font-size: 16px; font-weight: 800; letter-spacing: 1px; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+          <div style="display: ${hasLiveVideo ? "none" : "flex"}; width: 44px; height: 44px; border-radius: 50%; background: ${bg}; color: #ffffff; font-size: 15px; font-weight: 800; align-items: center; justify-content: center;">
             ${escapeHtml(initials)}
           </div>
-          <div style="position: absolute; bottom: 5px; left: 6px; right: 6px; display: flex; align-items: center; justify-content: space-between; background: rgba(15,23,42,0.78); padding: 2px 7px; border-radius: 6px;">
+          <div style="position: absolute; bottom: 4px; left: 6px; right: 6px; display: flex; align-items: center; justify-content: space-between; background: rgba(15,23,42,0.82); padding: 2px 7px; border-radius: 6px;">
             <span style="font-size: 11px; font-weight: 600; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(student.name)}</span>
             <span style="font-size: 10px; color: ${student.micOn ? "#22c55e" : "#ef4444"};">
               <i class="fa-solid ${student.micOn ? "fa-microphone" : "fa-microphone-slash"}"></i>
@@ -494,26 +575,39 @@
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
-          <button type="button" data-act="mute-mic" data-pid="${pid}" title="Mute Student Microphone" style="
-            background: ${student.micOn ? "#334155" : "#475569"}; color: #f8fafc; border: none;
-            border-radius: 6px; padding: 4px 2px; font-size: 10px; font-weight: 600; cursor: pointer;
+        <!-- Row 1: Pin to Front Stage + Remove Student -->
+        <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 4px;">
+          <button type="button" data-act="spotlight" data-pid="${pid}" style="
+            background: ${isSpotlighted ? "#0284c7" : "#334155"}; color: #f8fafc; border: none;
+            border-radius: 6px; padding: 4px 4px; font-size: 10px; font-weight: 700; cursor: pointer;
           ">
-            <i class="fa-solid fa-microphone-slash"></i> Mute
+            <i class="fa-solid fa-thumbtack"></i> ${isSpotlighted ? "On Stage" : "Pin Front"}
           </button>
-          <button type="button" data-act="stop-cam" data-pid="${pid}" title="Turn Off Student Camera" style="
-            background: ${student.camOn ? "#334155" : "#475569"}; color: #f8fafc; border: none;
-            border-radius: 6px; padding: 4px 2px; font-size: 10px; font-weight: 600; cursor: pointer;
+          <button type="button" data-act="kick-student" data-pid="${pid}" style="
+            background: #7f1d1d; color: #fecaca; border: none;
+            border-radius: 6px; padding: 4px 4px; font-size: 10px; font-weight: 700; cursor: pointer;
           ">
-            <i class="fa-solid fa-video-slash"></i> Cam Off
+            <i class="fa-solid fa-user-xmark"></i> Remove
           </button>
-          <button type="button" data-act="toggle-lock" data-pid="${pid}" title="Disable / Enable Student Mic & Camera" style="
-            background: ${(student.micLocked || student.camLocked) ? "#dc2626" : "#0f172a"};
+        </div>
+
+        <!-- Row 2: Separate Audio Disable & Video Disable Controls -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+          <button type="button" data-act="toggle-lock-mic" data-pid="${pid}" title="Disable / Enable Student Microphone" style="
+            background: ${student.micLocked ? "#dc2626" : "#0f172a"};
             color: #f8fafc; border: 1px solid #334155;
-            border-radius: 6px; padding: 4px 2px; font-size: 10px; font-weight: 700; cursor: pointer;
+            border-radius: 6px; padding: 4px 3px; font-size: 10px; font-weight: 600; cursor: pointer;
           ">
-            <i class="fa-solid ${(student.micLocked || student.camLocked) ? "fa-lock" : "fa-lock-open"}"></i>
-            ${(student.micLocked || student.camLocked) ? "Locked" : "Disable"}
+            <i class="fa-solid ${student.micLocked ? "fa-microphone-slash" : "fa-microphone"}"></i>
+            ${student.micLocked ? "Mic Locked" : "Disable Mic"}
+          </button>
+          <button type="button" data-act="toggle-lock-cam" data-pid="${pid}" title="Disable / Enable Student Camera" style="
+            background: ${student.camLocked ? "#dc2626" : "#0f172a"};
+            color: #f8fafc; border: 1px solid #334155;
+            border-radius: 6px; padding: 4px 3px; font-size: 10px; font-weight: 600; cursor: pointer;
+          ">
+            <i class="fa-solid ${student.camLocked ? "fa-video-slash" : "fa-video"}"></i>
+            ${student.camLocked ? "Cam Locked" : "Disable Cam"}
           </button>
         </div>
       `;
@@ -536,31 +630,40 @@
         const st = connectedStudents.get(pid);
         if (!st || !st.conn || !st.conn.open) return;
 
-        if (act === "mute-mic") {
-          st.micOn = false;
-          st.conn.send({ type: "host-control", action: "force-mute-mic" });
-          showLiveToast(`Muted ${st.name}'s microphone.`);
-        } else if (act === "stop-cam") {
-          st.camOn = false;
-          st.conn.send({ type: "host-control", action: "force-stop-cam" });
-          showLiveToast(`Turned off ${st.name}'s camera.`);
-        } else if (act === "toggle-lock") {
-          const nextLock = !(st.micLocked || st.camLocked);
-          st.micLocked = nextLock;
-          st.camLocked = nextLock;
-          if (nextLock) {
-            st.micOn = false;
-            st.camOn = false;
-          }
+        if (act === "spotlight") {
+          spotlightTargetId = spotlightTargetId === pid ? "host" : pid;
+          refreshHostStagePreview();
+          broadcastStreamToAllStudents();
+        } else if (act === "toggle-lock-mic") {
+          st.micLocked = !st.micLocked;
+          if (st.micLocked) st.micOn = false;
           st.conn.send({
             type: "host-control",
-            action: nextLock ? "lock-media" : "unlock-media"
+            action: st.micLocked ? "lock-mic" : "unlock-mic"
           });
-          showLiveToast(
-            nextLock
-              ? `Disabled microphone & camera permissions for ${st.name}.`
-              : `Re-enabled microphone & camera permissions for ${st.name}.`
-          );
+          showLiveToast(st.micLocked ? `Disabled microphone for ${st.name}.` : `Re-enabled microphone for ${st.name}.`);
+        } else if (act === "toggle-lock-cam") {
+          st.camLocked = !st.camLocked;
+          if (st.camLocked) st.camOn = false;
+          st.conn.send({
+            type: "host-control",
+            action: st.camLocked ? "lock-cam" : "unlock-cam"
+          });
+          showLiveToast(st.camLocked ? `Disabled camera for ${st.name}.` : `Re-enabled camera for ${st.name}.`);
+        } else if (act === "kick-student") {
+          st.conn.send({ type: "host-control", action: "kicked" });
+          setTimeout(() => {
+            try { st.conn.close(); } catch (e) {}
+            if (st.mediaCall) { try { st.mediaCall.close(); } catch (e) {} }
+            connectedStudents.delete(pid);
+            if (spotlightTargetId === pid) spotlightTargetId = "host";
+            updateStudentCountBadge();
+            renderHostParticipantsList();
+            syncRosterToAllStudents();
+            refreshHostStagePreview();
+          }, 150);
+          showLiveToast(`Removed ${st.name} from the classroom.`);
+          return;
         }
         renderHostParticipantsList();
         syncRosterToAllStudents();
@@ -568,7 +671,6 @@
     });
   }
 
-  // Acquire & Process Host Microphone (with 10 Voice Presets) and Camera (with Video Filters)
   async function acquireHostMedia(micId, camId) {
     if (rawMicStream) {
       rawMicStream.getTracks().forEach((t) => t.stop());
@@ -624,6 +726,19 @@
     const placeholder = document.getElementById("iqraTeacherPlaceholder");
     if (!preview || !placeholder) return;
 
+    applyShapeToHostStage();
+
+    // If Host pinned a student to front Main Stage
+    if (spotlightTargetId !== "host") {
+      const spotStudent = connectedStudents.get(spotlightTargetId);
+      if (spotStudent && spotStudent.incomingStream) {
+        preview.srcObject = spotStudent.incomingStream;
+        preview.style.display = "block";
+        placeholder.style.display = "none";
+        return;
+      }
+    }
+
     const screenOrCanvas =
       (localScreenStream && localScreenStream.active)
         ? localScreenStream
@@ -649,7 +764,7 @@
     placeholder.style.display = "flex";
   }
 
-  // Device, Video Filter, 10 Voice Filters & Profile Settings Modal
+  // Settings Modal: Mic, Camera, Video Filter, Video Frame Shape, 12 Age/Gender Voice Filters & Profile Photo
   async function openHostDeviceSettingsModal() {
     const existing = document.getElementById("iqraLiveSettingsModal");
     if (existing) existing.remove();
@@ -683,14 +798,18 @@
       (f) => `<option value="${f.id}" ${f.id === selectedVideoFilter ? "selected" : ""}>${escapeHtml(f.label)}</option>`
     ).join("");
 
+    const videoShapeOptions = VIDEO_SHAPES.map(
+      (s) => `<option value="${s.id}" ${s.id === selectedVideoShape ? "selected" : ""}>${escapeHtml(s.label)}</option>`
+    ).join("");
+
     const voicePresetOptions = VOICE_PRESETS.map(
       (v) => `<option value="${v.id}" ${v.id === selectedVoicePreset ? "selected" : ""}>${escapeHtml(v.label)}</option>`
     ).join("");
 
     modal.innerHTML = `
-      <div style="background: #ffffff; width: 410px; max-width: 94vw; max-height: 90vh; overflow-y: auto; border-radius: 16px; padding: 20px; box-shadow: 0 20px 44px rgba(0,0,0,0.3); position: relative;">
+      <div style="background: #ffffff; width: 420px; max-width: 94vw; max-height: 90vh; overflow-y: auto; border-radius: 16px; padding: 20px; box-shadow: 0 20px 44px rgba(0,0,0,0.3); position: relative;">
         <button id="closeHostSettingsModal" type="button" style="position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; border-radius: 50%; border: none; background: #f1f5f9; color: #475569; cursor: pointer;">✕</button>
-        <h4 style="margin: 0 0 14px; font-size: 16px; font-weight: 800; color: #0f172a;">Studio Audio, Video & Filter Settings</h4>
+        <h4 style="margin: 0 0 14px; font-size: 16px; font-weight: 800; color: #0f172a;">Studio Audio, Video, Shape & Voice Settings</h4>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
           <div>
@@ -707,18 +826,24 @@
           </div>
         </div>
 
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; font-size: 11.5px; font-weight: 700; color: #0284c7; margin-bottom: 4px;">
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Live Video Filter
-          </label>
-          <select id="iqraVideoFilterSelect" style="width: 100%; padding: 8px 10px; border: 1.5px solid #bae6fd; background: #f0f9ff; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0f172a;">
-            ${videoFilterOptions}
-          </select>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+          <div>
+            <label style="display: block; font-size: 11px; font-weight: 700; color: #0284c7; margin-bottom: 4px;">Live Video Filter</label>
+            <select id="iqraVideoFilterSelect" style="width: 100%; padding: 8px; border: 1.5px solid #bae6fd; background: #f0f9ff; border-radius: 9px; font-size: 12px; font-weight: 600; color: #0f172a;">
+              ${videoFilterOptions}
+            </select>
+          </div>
+          <div>
+            <label style="display: block; font-size: 11px; font-weight: 700; color: #7c3aed; margin-bottom: 4px;">Video Frame Shape</label>
+            <select id="iqraVideoShapeSelect" style="width: 100%; padding: 8px; border: 1.5px solid #ddd6fe; background: #f5f3ff; border-radius: 9px; font-size: 12px; font-weight: 600; color: #0f172a;">
+              ${videoShapeOptions}
+            </select>
+          </div>
         </div>
 
         <div style="margin-bottom: 12px;">
           <label style="display: block; font-size: 11.5px; font-weight: 700; color: #16a34a; margin-bottom: 4px;">
-            <i class="fa-solid fa-sliders"></i> Live Voice Audio Filter (10 Voices)
+            <i class="fa-solid fa-sliders"></i> Live Voice Audio Filter (12 Voices)
           </label>
           <select id="iqraVoicePresetSelect" style="width: 100%; padding: 8px 10px; border: 1.5px solid #bbf7d0; background: #f0fdf4; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0f172a;">
             ${voicePresetOptions}
@@ -754,6 +879,7 @@
       selectedMicId = document.getElementById("iqraMicSelect").value;
       selectedCamId = document.getElementById("iqraCamSelect").value;
       selectedVideoFilter = document.getElementById("iqraVideoFilterSelect").value;
+      selectedVideoShape = document.getElementById("iqraVideoShapeSelect").value;
       selectedVoicePreset = document.getElementById("iqraVoicePresetSelect").value;
       modal.remove();
 
@@ -766,53 +892,62 @@
         }
       }
 
+      broadcastToAllStudents({ type: "video-shape", shape: selectedVideoShape });
       await acquireHostMedia(selectedMicId, selectedCamId);
-      showLiveToast("Video filter, voice preset & device settings applied.");
+      showLiveToast("Studio video shape, voice filter & device settings applied.");
     };
   }
 
-  function askEndClassConfirmation(onConfirm) {
-    const existing = document.getElementById("iqraEndClassConfirmModal");
+  // Dual Host Exit Modal: Option 1 (Leave Class Only) vs Option 2 (End Class for All)
+  function askHostExitOptions(onLeaveOnly, onEndForAll) {
+    const existing = document.getElementById("iqraHostExitModal");
     if (existing) existing.remove();
 
     const overlay = document.createElement("div");
-    overlay.id = "iqraEndClassConfirmModal";
+    overlay.id = "iqraHostExitModal";
     overlay.style.cssText = `
-      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55);
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.58);
       backdrop-filter: blur(3px); z-index: 2147483647;
       display: flex; align-items: center; justify-content: center;
       font-family: system-ui, -apple-system, sans-serif;
     `;
 
     overlay.innerHTML = `
-      <div style="background: #ffffff; width: 320px; max-width: 90vw; border-radius: 16px; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); text-align: center;">
-        <div style="width: 44px; height: 44px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 18px;">
-          <i class="fa-solid fa-video-slash"></i>
+      <div style="background: #ffffff; width: 350px; max-width: 92vw; border-radius: 16px; padding: 20px; box-shadow: 0 20px 44px rgba(0,0,0,0.28); text-align: center;">
+        <div style="width: 44px; height: 44px; border-radius: 50%; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 18px;">
+          <i class="fa-solid fa-right-from-bracket"></i>
         </div>
-        <h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 700; color: #0f172a;">End Live Class?</h4>
-        <p style="margin: 0 0 18px; font-size: 13px; color: #64748b; line-height: 1.45;">
-          This will close the classroom and disconnect all connected students.
+        <h4 style="margin: 0 0 6px; font-size: 16px; font-weight: 800; color: #0f172a;">Disconnect Classroom</h4>
+        <p style="margin: 0 0 16px; font-size: 12.5px; color: #64748b; line-height: 1.45;">
+          Choose whether you want to leave temporarily or close the class for everyone.
         </p>
-        <div style="display: flex; gap: 10px; justify-content: center;">
-          <button id="iqraCancelEndClassBtn" type="button" style="flex: 1; padding: 9px 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; font-size: 13px; font-weight: 600; cursor: pointer;">
-            Cancel
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button id="btnHostLeaveOnly" type="button" style="width: 100%; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #0284c7; background: #f0f9ff; color: #0369a1; font-size: 13px; font-weight: 700; cursor: pointer;">
+            Leave Class Only (Keep Students Connected)
           </button>
-          <button id="iqraConfirmEndClassBtn" type="button" style="flex: 1; padding: 9px 12px; border-radius: 10px; border: none; background: #dc2626; color: #ffffff; font-size: 13px; font-weight: 600; cursor: pointer;">
-            End Class
+          <button id="btnHostEndForAll" type="button" style="width: 100%; padding: 10px 12px; border-radius: 10px; border: none; background: #dc2626; color: #ffffff; font-size: 13px; font-weight: 700; cursor: pointer;">
+            End Class for All (Remove Everyone)
+          </button>
+          <button id="btnCancelHostExit" type="button" style="width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; font-size: 12.5px; font-weight: 600; cursor: pointer;">
+            Cancel
           </button>
         </div>
       </div>
     `;
 
     document.body.appendChild(overlay);
-    document.getElementById("iqraCancelEndClassBtn").onclick = () => overlay.remove();
-    document.getElementById("iqraConfirmEndClassBtn").onclick = () => {
+    document.getElementById("btnCancelHostExit").onclick = () => overlay.remove();
+    document.getElementById("btnHostLeaveOnly").onclick = () => {
       overlay.remove();
-      onConfirm();
+      onLeaveOnly();
+    };
+    document.getElementById("btnHostEndForAll").onclick = () => {
+      overlay.remove();
+      onEndForAll();
     };
   }
 
-  function cleanupTeacherSession() {
+  function cleanupTeacherSession(endForAll) {
     stopBoardSharingStreams();
     if (videoFilterLoopId) {
       cancelAnimationFrame(videoFilterLoopId);
@@ -830,27 +965,32 @@
       rawCamStream.getTracks().forEach((t) => t.stop());
       rawCamStream = null;
     }
+
     connectedStudents.forEach((student) => {
       try {
         if (student.conn && student.conn.open) {
-          student.conn.send({ type: "class-ended" });
-          student.conn.close();
+          student.conn.send({ type: endForAll ? "class-ended" : "host-left-temp" });
+          if (endForAll) student.conn.close();
         }
         if (student.mediaCall) student.mediaCall.close();
       } catch (e) {}
     });
-    connectedStudents.clear();
-    chatHistory.length = 0;
 
-    if (classPeer) {
-      try { classPeer.destroy(); } catch (e) {}
-      classPeer = null;
+    if (endForAll) {
+      connectedStudents.clear();
+      chatHistory.length = 0;
+      if (classPeer) {
+        try { classPeer.destroy(); } catch (e) {}
+        classPeer = null;
+      }
     }
+
     isHostingActive = false;
     isMicMuted = false;
     isCamOff = false;
     isWallMinimized = false;
     isFullSizePanel = false;
+    spotlightTargetId = "host";
     unreadMessages = 0;
 
     const panel = document.getElementById("iqraLiveClassPanel");
@@ -906,7 +1046,6 @@
           wallTab.style.background = "rgba(15, 23, 42, 0.78)";
         };
 
-        // Allow vertical dragging along the left wall + click to expand
         let dragging = false;
         let movedVertically = false;
         let startY = 0;
@@ -954,7 +1093,7 @@
     }
   }
 
-  // Step 1: Host Setup Lobby Modal
+  // Step 1: Host Lobby Modal (Permanent Link or Generate New Link on Host's Choice)
   function openHostLobbyModal() {
     if (isHostingActive) {
       toggleLeftWallMinimize(false);
@@ -973,10 +1112,8 @@
       font-family: system-ui, -apple-system, sans-serif;
     `;
 
-    const buildPreviewUrl = (slug) => `${getBaseAppUrl()}?liveClass=${encodeURIComponent(slug)}`;
-
     modal.innerHTML = `
-      <div style="background: #ffffff; width: 410px; max-width: 94vw; border-radius: 18px; padding: 22px; box-shadow: 0 24px 48px rgba(0,0,0,0.28); position: relative;">
+      <div style="background: #ffffff; width: 420px; max-width: 94vw; border-radius: 18px; padding: 22px; box-shadow: 0 24px 48px rgba(0,0,0,0.28); position: relative;">
         <button id="closeLiveLobbyModal" type="button" style="position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 50%; border: none; background: #f1f5f9; color: #475569; font-size: 15px; cursor: pointer;">✕</button>
 
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
@@ -985,7 +1122,7 @@
           </div>
           <div>
             <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #0f172a;">${ACADEMY_NAME}</h3>
-            <p style="margin: 2px 0 0; font-size: 12px; color: #64748b;">Configure Live Classroom & Start Hosting</p>
+            <p style="margin: 2px 0 0; font-size: 12px; color: #64748b;">Configure Classroom & Start Hosting</p>
           </div>
         </div>
 
@@ -1008,15 +1145,20 @@
         </div>
 
         <div style="margin-bottom: 10px;">
-          <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 4px;">Custom Room ID</label>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <label style="font-size: 11px; font-weight: 700; color: #334155;">Classroom Link ID (Keep same or generate new)</label>
+            <button id="btnGenerateNewRoomSlug" type="button" style="background: #e0f2fe; color: #0369a1; border: none; border-radius: 6px; padding: 2px 8px; font-size: 10.5px; font-weight: 700; cursor: pointer;">
+              New Link ID
+            </button>
+          </div>
           <input id="iqraCustomRoomInput" type="text" value="${escapeHtml(activeRoomSlug)}" placeholder="e.g. iqra-darse-nizami"
             style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0284c7; outline: none;" />
         </div>
 
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px; margin-bottom: 15px;">
-          <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 3px;">Student Invite Link</div>
+          <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 3px;">Student Invite Link (Secure Classroom Only)</div>
           <div id="iqraInvitePreviewText" style="font-size: 11px; color: #0f172a; word-break: break-all; font-family: monospace;">
-            ${escapeHtml(buildPreviewUrl(activeRoomSlug))}
+            ${escapeHtml(getStudentClassUrl(activeRoomSlug))}
           </div>
         </div>
 
@@ -1050,14 +1192,20 @@
     };
 
     roomInput.addEventListener("input", () => {
-      previewEl.textContent = buildPreviewUrl(sanitizeRoomSlug(roomInput.value));
+      previewEl.textContent = getStudentClassUrl(sanitizeRoomSlug(roomInput.value));
     });
+
+    document.getElementById("btnGenerateNewRoomSlug").onclick = () => {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      roomInput.value = `iqra-class-${rand}`;
+      previewEl.textContent = getStudentClassUrl(roomInput.value);
+    };
 
     document.getElementById("closeLiveLobbyModal").onclick = () => modal.remove();
 
     document.getElementById("btnCopyLobbyLink").onclick = () => {
-      navigator.clipboard.writeText(buildPreviewUrl(sanitizeRoomSlug(roomInput.value))).then(() => {
-        showLiveToast("Student invite link copied.");
+      navigator.clipboard.writeText(getStudentClassUrl(sanitizeRoomSlug(roomInput.value))).then(() => {
+        showLiveToast("Student classroom link copied.");
       });
     };
 
@@ -1073,7 +1221,7 @@
   // Step 2: Active Teacher Studio Panel
   async function launchTeacherBroadcastPanel() {
     isHostingActive = true;
-    const inviteLink = `${getBaseAppUrl()}?liveClass=${encodeURIComponent(activeRoomSlug)}`;
+    const inviteLink = getStudentClassUrl(activeRoomSlug);
     const hostInitials = getInitials(teacherDisplayName);
 
     const container = document.createElement("div");
@@ -1082,8 +1230,8 @@
       position: fixed;
       bottom: 16px;
       left: 16px;
-      width: 580px;
-      height: 365px;
+      width: 600px;
+      height: 380px;
       max-width: 100vw;
       max-height: 100vh;
       background: #0f172a;
@@ -1125,7 +1273,7 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 5px; flex-shrink: 0;">
-          <button id="btnCopyClassLink" type="button" title="Copy Student Invite Link" style="
+          <button id="btnCopyClassLink" type="button" title="Copy Student Classroom Link" style="
             background: #0284c7; color: #fff; border: none; border-radius: 7px;
             padding: 4px 9px; font-size: 11px; font-weight: 600; cursor: pointer;
           ">Copy Link</button>
@@ -1145,7 +1293,7 @@
             width: 25px; height: 25px; font-size: 11px; cursor: pointer;
           "><i class="fa-solid fa-angles-left"></i></button>
 
-          <button id="btnCloseLiveClass" type="button" title="End Live Class" style="
+          <button id="btnCloseLiveClass" type="button" title="Leave or End Live Class" style="
             background: #dc2626; color: #fff; border: none; border-radius: 7px;
             width: 25px; height: 25px; font-size: 11px; cursor: pointer;
           ">✕</button>
@@ -1154,20 +1302,21 @@
 
       <!-- Main Stage + Right Participants/Chat Panel -->
       <div style="flex: 1; display: flex; overflow: hidden; background: #020617;">
-        <!-- Teacher Broadcast Stage -->
-        <div id="iqraLiveFrameWrap" style="position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-          <video id="iqraTeacherPreviewVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: contain; display: none; background: #000;"></video>
-          <div id="iqraTeacherPlaceholder" style="display: flex; flex-direction: column; align-items: center; text-align: center; color: #94a3b8; padding: 16px;">
-            <div id="iqraHostStageAvatar" style="width: 64px; height: 64px; border-radius: 50%; background: #0284c7; color: #ffffff; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; border: 2px solid #38bdf8; overflow: hidden;">
-              ${teacherAvatarDataUrl ? `<img src="${teacherAvatarDataUrl}" style="width:100%;height:100%;object-fit:cover;" />` : escapeHtml(hostInitials)}
+        <div id="iqraLiveFrameWrap" style="position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 8px;">
+          <div id="iqraHostStageFrame" style="width: 100%; height: 100%; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000000; position: relative;">
+            <video id="iqraTeacherPreviewVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: contain; display: none; background: #000;"></video>
+            <div id="iqraTeacherPlaceholder" style="display: flex; flex-direction: column; align-items: center; text-align: center; color: #94a3b8; padding: 16px;">
+              <div id="iqraHostStageAvatar" style="width: 64px; height: 64px; border-radius: 50%; background: #0284c7; color: #ffffff; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; border: 2px solid #38bdf8; overflow: hidden;">
+                ${teacherAvatarDataUrl ? `<img src="${teacherAvatarDataUrl}" style="width:100%;height:100%;object-fit:cover;" />` : escapeHtml(hostInitials)}
+              </div>
+              <div style="font-size: 13px; font-weight: 700; color: #f8fafc;">${escapeHtml(teacherDisplayName)}</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Click <b>Share Board</b> below to broadcast your screen</div>
             </div>
-            <div style="font-size: 13px; font-weight: 700; color: #f8fafc;">${escapeHtml(teacherDisplayName)}</div>
-            <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Click <b>Share Board</b> below to broadcast your screen</div>
           </div>
         </div>
 
         <!-- Right Panel: Students List & Messages -->
-        <div id="iqraHostRightSidePanel" style="width: 235px; max-width: 48%; background: #0f172a; border-left: 1px solid #334155; display: flex; flex-direction: column;">
+        <div id="iqraHostRightSidePanel" style="width: 245px; max-width: 50%; background: #0f172a; border-left: 1px solid #334155; display: flex; flex-direction: column;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #334155; background: #1e293b;">
             <button id="tabHostParticipants" type="button" style="padding: 7px 6px; border: none; background: #0f172a; color: #38bdf8; font-size: 11px; font-weight: 700; cursor: pointer; border-bottom: 2px solid #38bdf8;">
               Students
@@ -1207,7 +1356,7 @@
         <button id="btnShareBoardScreen" type="button" style="background: #16a34a; color: #ffffff; border: none; border-radius: 8px; padding: 5px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
           <i class="fa-solid fa-display"></i> Share Board
         </button>
-        <button id="btnHostDeviceSettings" type="button" title="Audio, Video & Filter Settings" style="background: #334155; color: #f8fafc; border: none; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
+        <button id="btnHostDeviceSettings" type="button" title="Audio, Video, Shape & Voice Settings" style="background: #334155; color: #f8fafc; border: none; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
           <i class="fa-solid fa-gear"></i>
         </button>
       </div>
@@ -1217,126 +1366,146 @@
     makeElementDraggable(container, document.getElementById("iqraLiveClassHeader"));
     renderHostParticipantsList();
 
-    classPeer = new Peer(activeRoomSlug);
+    if (!classPeer || classPeer.destroyed) {
+      classPeer = new Peer(activeRoomSlug);
 
-    classPeer.on("open", () => {
-      appendChatMessage("System", `${ACADEMY_NAME} — "${courseTitle}" is live.`, false, true);
-      showLiveToast(`Hosting started: ${courseTitle}`);
-    });
-
-    classPeer.on("error", (err) => {
-      if (err && err.type === "unavailable-id") {
-        showLiveToast("This Class ID is already active. Please choose another ID.");
-        cleanupTeacherSession();
-        openHostLobbyModal();
-      }
-    });
-
-    classPeer.on("call", (incomingCall) => {
-      incomingCall.answer();
-      incomingCall.on("stream", (studentStream) => {
-        const entry = connectedStudents.get(incomingCall.peer);
-        if (entry) {
-          entry.incomingStream = studentStream;
-          renderHostParticipantsList();
-        }
+      classPeer.on("open", () => {
+        appendChatMessage("System", `${ACADEMY_NAME} — "${courseTitle}" is live.`, false, true);
+        showLiveToast(`Hosting started: ${courseTitle}`);
       });
-    });
 
-    classPeer.on("connection", (conn) => {
-      conn.on("open", () => {
-        connectedStudents.set(conn.peer, {
-          conn,
-          mediaCall: null,
-          incomingStream: null,
-          name: "Student",
-          micOn: false,
-          camOn: false,
-          micLocked: false,
-          camLocked: false
-        });
-        updateStudentCountBadge();
-        renderHostParticipantsList();
-
-        conn.send({
-          type: "class-meta",
-          academyName: ACADEMY_NAME,
-          courseTitle,
-          teacherName: teacherDisplayName,
-          teacherAvatar: teacherAvatarDataUrl
-        });
-        conn.send({ type: "chat-history", history: chatHistory.slice(-30) });
-        syncRosterToAllStudents();
-
-        const stream = getActiveBroadcastStream();
-        if (stream) {
-          const call = classPeer.call(conn.peer, stream);
-          const entry = connectedStudents.get(conn.peer);
-          if (entry) entry.mediaCall = call;
+      classPeer.on("error", (err) => {
+        if (err && err.type === "unavailable-id") {
+          showLiveToast("This Class ID is already active. Please choose another ID.");
+          cleanupTeacherSession(true);
+          openHostLobbyModal();
         }
       });
 
-      conn.on("data", (data) => {
-        if (!data) return;
-        const entry = connectedStudents.get(conn.peer);
-
-        if (data.type === "student-hello") {
-          const sName = (data.name || "Student").trim();
+      classPeer.on("call", (incomingCall) => {
+        incomingCall.answer();
+        incomingCall.on("stream", (studentStream) => {
+          const entry = connectedStudents.get(incomingCall.peer);
           if (entry) {
-            entry.name = sName;
-            entry.micOn = Boolean(data.micOn);
-            entry.camOn = Boolean(data.camOn);
+            entry.incomingStream = studentStream;
+            renderHostParticipantsList();
+            if (spotlightTargetId === incomingCall.peer) {
+              refreshHostStagePreview();
+              broadcastStreamToAllStudents();
+            }
           }
+        });
+      });
+
+      classPeer.on("connection", (conn) => {
+        conn.on("open", () => {
+          connectedStudents.set(conn.peer, {
+            conn,
+            mediaCall: null,
+            incomingStream: null,
+            name: "Student",
+            micOn: false,
+            camOn: false,
+            micLocked: false,
+            camLocked: false
+          });
+          updateStudentCountBadge();
           renderHostParticipantsList();
+
+          conn.send({
+            type: "class-meta",
+            academyName: ACADEMY_NAME,
+            courseTitle,
+            teacherName: teacherDisplayName,
+            teacherAvatar: teacherAvatarDataUrl,
+            videoShape: selectedVideoShape
+          });
+          conn.send({ type: "chat-history", history: chatHistory.slice(-30) });
           syncRosterToAllStudents();
-          appendChatMessage("System", `${sName} joined the class.`, false, true);
-          broadcastToAllStudents({ type: "system-msg", text: `${sName} joined the class.` });
-          showLiveToast(`${sName} joined the live class.`);
-        } else if (data.type === "student-media-state") {
-          if (entry) {
-            entry.micOn = Boolean(data.micOn);
-            entry.camOn = Boolean(data.camOn);
+
+          const stream = getActiveBroadcastStream();
+          if (stream) {
+            const call = classPeer.call(conn.peer, stream);
+            const entry = connectedStudents.get(conn.peer);
+            if (entry) entry.mediaCall = call;
+          }
+        });
+
+        conn.on("data", (data) => {
+          if (!data) return;
+          const entry = connectedStudents.get(conn.peer);
+
+          if (data.type === "student-hello") {
+            const sName = (data.name || "Student").trim();
+            if (entry) {
+              entry.name = sName;
+              entry.micOn = Boolean(data.micOn);
+              entry.camOn = Boolean(data.camOn);
+            }
             renderHostParticipantsList();
             syncRosterToAllStudents();
+            appendChatMessage("System", `${sName} joined the class.`, false, true);
+            broadcastToAllStudents({ type: "system-msg", text: `${sName} joined the class.` });
+            showLiveToast(`${sName} joined the live class.`);
+          } else if (data.type === "student-media-state") {
+            if (entry) {
+              entry.micOn = Boolean(data.micOn);
+              entry.camOn = Boolean(data.camOn);
+              renderHostParticipantsList();
+              syncRosterToAllStudents();
+            }
+          } else if (data.type === "chat-message") {
+            const sender = (entry && entry.name) || data.sender || "Student";
+            appendChatMessage(sender, data.text, false, false);
+            broadcastToAllStudents({ type: "chat-message", sender, text: data.text });
+          } else if (data.type === "raise-hand") {
+            const sender = (entry && entry.name) || data.studentName || "Student";
+            appendChatMessage("System", `✋ ${sender} raised their hand.`, false, true);
+            showLiveToast(`✋ ${sender} raised their hand!`);
+          } else if (data.type === "request-stream") {
+            const stream = getActiveBroadcastStream();
+            if (stream && entry) {
+              entry.mediaCall = classPeer.call(conn.peer, stream);
+            }
           }
-        } else if (data.type === "chat-message") {
-          const sender = (entry && entry.name) || data.sender || "Student";
-          appendChatMessage(sender, data.text, false, false);
-          broadcastToAllStudents({ type: "chat-message", sender, text: data.text });
-        } else if (data.type === "raise-hand") {
-          const sender = (entry && entry.name) || data.studentName || "Student";
-          appendChatMessage("System", `✋ ${sender} raised their hand.`, false, true);
-          showLiveToast(`✋ ${sender} raised their hand!`);
-        } else if (data.type === "request-stream") {
-          const stream = getActiveBroadcastStream();
-          if (stream && entry) {
-            entry.mediaCall = classPeer.call(conn.peer, stream);
-          }
-        }
-      });
+        });
 
-      conn.on("close", () => {
-        const entry = connectedStudents.get(conn.peer);
-        const leftName = (entry && entry.name) || "Student";
-        connectedStudents.delete(conn.peer);
-        updateStudentCountBadge();
-        renderHostParticipantsList();
-        syncRosterToAllStudents();
-        appendChatMessage("System", `${leftName} left the class.`, false, true);
+        conn.on("close", () => {
+          const entry = connectedStudents.get(conn.peer);
+          const leftName = (entry && entry.name) || "Student";
+          connectedStudents.delete(conn.peer);
+          if (spotlightTargetId === conn.peer) spotlightTargetId = "host";
+          updateStudentCountBadge();
+          renderHostParticipantsList();
+          syncRosterToAllStudents();
+          refreshHostStagePreview();
+          appendChatMessage("System", `${leftName} left the class.`, false, true);
+        });
       });
-    });
+    } else {
+      // Host rejoined existing open room
+      updateStudentCountBadge();
+      renderHostParticipantsList();
+      broadcastToAllStudents({
+        type: "class-meta",
+        academyName: ACADEMY_NAME,
+        courseTitle,
+        teacherName: teacherDisplayName,
+        teacherAvatar: teacherAvatarDataUrl,
+        videoShape: selectedVideoShape
+      });
+    }
 
     await acquireHostMedia(selectedMicId, selectedCamId);
 
     document.getElementById("btnCopyClassLink").onclick = () => {
       navigator.clipboard.writeText(inviteLink).then(() => {
-        showLiveToast("Student invite link copied.");
+        showLiveToast("Student classroom link copied.");
       });
     };
 
     document.getElementById("btnWallMinLiveClass").onclick = () => toggleLeftWallMinimize(true);
 
-    // True Full-Viewport Edge-to-Edge Toggle (Image 1 Fix)
     const fullBtn = document.getElementById("btnFullSizeLiveClass");
     fullBtn.onclick = () => {
       isFullSizePanel = !isFullSizePanel;
@@ -1364,8 +1533,8 @@
         container.style.left = prev.left || "16px";
         container.style.right = "auto";
         container.style.bottom = prev.bottom || "16px";
-        container.style.width = prev.width || "580px";
-        container.style.height = prev.height || "365px";
+        container.style.width = prev.width || "600px";
+        container.style.height = prev.height || "380px";
         container.style.borderRadius = "16px";
         container.style.border = "1.5px solid #334155";
         container.style.resize = "both";
@@ -1510,439 +1679,16 @@
     document.getElementById("btnHostDeviceSettings").onclick = openHostDeviceSettingsModal;
 
     document.getElementById("btnCloseLiveClass").onclick = () => {
-      askEndClassConfirmation(() => {
-        cleanupTeacherSession();
-        showLiveToast("Live Class ended.");
-      });
-    };
-  }
-
-  // =========================================================================
-  // STUDENT CLASSROOM VIEW
-  // =========================================================================
-  function joinStudentLiveClass(roomId) {
-    document.body.innerHTML = `
-      <div style="position: fixed; inset: 0; background: #020617; color: #f8fafc; display: flex; flex-direction: column; font-family: system-ui, -apple-system, sans-serif;">
-        <!-- Join Name Overlay -->
-        <div id="iqraStudentJoinGate" style="position: fixed; inset: 0; background: rgba(2, 6, 23, 0.94); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px;">
-          <div style="background: #0f172a; border: 1px solid #1e293b; width: 350px; max-width: 92vw; border-radius: 16px; padding: 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.45);">
-            <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; display: flex; align-items: center; justify-content: center; font-size: 21px; margin: 0 auto 10px;">
-              <i class="fa-solid fa-mosque"></i>
-            </div>
-            <div style="font-size: 13px; font-weight: 800; color: #38bdf8; margin-bottom: 2px;">${ACADEMY_NAME}</div>
-            <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700;">Join Live Classroom</h3>
-            <p style="margin: 0 0 14px; font-size: 12px; color: #94a3b8;">Room ID: <b>${escapeHtml(roomId)}</b></p>
-            <input id="iqraStudentNameInput" type="text" placeholder="Enter your First & Last Name..." style="
-              width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px;
-              border: 1px solid #334155; background: #1e293b; color: #f8fafc;
-              font-size: 13.5px; margin-bottom: 12px; outline: none;
-            " />
-            <button id="btnEnterStudentClass" type="button" style="
-              width: 100%; padding: 10px; border-radius: 10px; border: none;
-              background: #16a34a; color: #ffffff; font-size: 14px; font-weight: 700; cursor: pointer;
-            ">Join Class</button>
-          </div>
-        </div>
-
-        <!-- Top Navbar -->
-        <div style="background: #0f172a; padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 9px; min-width: 0;">
-            <span style="width: 9px; height: 9px; border-radius: 50%; background: #22c55e; flex-shrink: 0;"></span>
-            <div style="min-width: 0;">
-              <div id="iqraStudentHeaderAcademy" style="font-size: 13.5px; font-weight: 800; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ${ACADEMY_NAME}
-              </div>
-              <div id="iqraStudentHeaderCourse" style="font-size: 11.5px; color: #38bdf8; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ${escapeHtml(roomId)}
-              </div>
-            </div>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-            <button id="btnStudentToggleSidebar" type="button" title="Show/Hide Chat & Students Panel" style="position: relative; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
-              <i class="fa-solid fa-table-columns"></i> Panel
-              <span id="iqraChatUnreadBadge" style="display: none; position: absolute; top: -5px; right: -5px; background: #ef4444; color: #fff; font-size: 9px; font-weight: 700; min-width: 15px; height: 15px; border-radius: 999px; align-items: center; justify-content: center; padding: 0 3px;">0</span>
-            </button>
-            <button id="btnStudentFullscreen" type="button" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
-              ⛶ Fullscreen
-            </button>
-          </div>
-        </div>
-
-        <!-- Main Classroom Area -->
-        <div style="position: relative; flex: 1; display: flex; overflow: hidden;">
-          <div style="position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #000;">
-            <video id="iqraStudentStreamVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
-            <div id="iqraStudentWaitingState" style="text-align: center; padding: 24px; max-width: 380px;">
-              <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); color: #38bdf8; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 14px;">
-                <i class="fa-solid fa-chalkboard-user"></i>
-              </div>
-              <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 700;">Connected to Classroom</h3>
-              <p id="iqraStudentStatusText" style="margin: 0; font-size: 13px; color: #94a3b8; line-height: 1.5;">
-                Waiting for the teacher to start sharing the board or camera...
-              </p>
-            </div>
-
-            <div id="iqraStudentSelfPip" style="display: none; position: absolute; bottom: 14px; right: 14px; width: 120px; height: 84px; border-radius: 10px; overflow: hidden; border: 2px solid #38bdf8; background: #0f172a; box-shadow: 0 8px 20px rgba(0,0,0,0.5);">
-              <video id="iqraStudentSelfVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
-            </div>
-          </div>
-
-          <!-- Collapsible Right Sidebar (Messages & Students List) -->
-          <div id="iqraStudentRightSidebar" style="
-            display: flex; width: 280px; max-width: 82vw; background: #0f172a;
-            border-left: 1px solid #1e293b; flex-direction: column;
-          ">
-            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; background: #1e293b; padding-right: 6px;">
-              <div style="display: flex; flex: 1;">
-                <button id="tabStudentMessages" type="button" style="flex: 1; padding: 9px 6px; border: none; background: #0f172a; color: #38bdf8; font-size: 12px; font-weight: 700; cursor: pointer; border-bottom: 2px solid #38bdf8;">
-                  Messages
-                </button>
-                <button id="tabStudentParticipants" type="button" style="flex: 1; padding: 9px 6px; border: none; background: transparent; color: #94a3b8; font-size: 12px; font-weight: 700; cursor: pointer;">
-                  Students
-                </button>
-              </div>
-              <button id="btnCloseStudentSidebar" type="button" title="Hide Panel for Full Screen Board" style="background: none; border: none; color: #94a3b8; font-size: 14px; padding: 6px 8px; cursor: pointer;">✕</button>
-            </div>
-
-            <div id="iqraStudentMessagesTab" style="display: flex; flex: 1; flex-direction: column; overflow: hidden;">
-              <div id="iqraLiveChatMessages" style="flex: 1; overflow-y: auto; padding: 10px;"></div>
-              <div style="padding: 8px; border-top: 1px solid #1e293b; display: flex; gap: 6px;">
-                <input id="iqraStudentChatInput" type="text" placeholder="Type a message..." style="
-                  flex: 1; min-width: 0; background: #1e293b; border: 1px solid #334155;
-                  border-radius: 8px; padding: 7px 10px; font-size: 12.5px; color: #f8fafc; outline: none;
-                " />
-                <button id="btnSendStudentChat" type="button" style="
-                  background: #0284c7; color: #ffffff; border: none; border-radius: 8px;
-                  padding: 0 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
-                ">Send</button>
-              </div>
-            </div>
-
-            <div id="iqraStudentParticipantsTab" style="display: none; flex: 1; overflow-y: auto; padding: 10px;"></div>
-          </div>
-        </div>
-
-        <!-- Bottom Student Control Bar -->
-        <div style="background: #0f172a; padding: 8px 14px; display: flex; align-items: center; justify-content: center; gap: 10px; border-top: 1px solid #1e293b;">
-          <button id="btnStudentMicToggle" type="button" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
-            <i class="fa-solid fa-microphone-slash"></i> Mic Off
-          </button>
-          <button id="btnStudentCamToggle" type="button" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
-            <i class="fa-solid fa-video-slash"></i> Cam Off
-          </button>
-          <button id="btnStudentRaiseHand" type="button" style="background: #f59e0b; color: #0f172a; border: none; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">
-            ✋ Raise Hand
-          </button>
-        </div>
-      </div>
-    `;
-
-    isHostSidePanelOpen = true;
-    activeHostTab = "chat";
-
-    let studentName = "Student";
-    let studentPeer = null;
-    let teacherConn = null;
-    let studentLocalStream = null;
-    let studentOutgoingCall = null;
-    let studentMicOn = false;
-    let studentCamOn = false;
-    let hostLockedMedia = false;
-
-    const sidebarEl = document.getElementById("iqraStudentRightSidebar");
-    const msgTabEl = document.getElementById("iqraStudentMessagesTab");
-    const partTabEl = document.getElementById("iqraStudentParticipantsTab");
-    const tabMsgBtn = document.getElementById("tabStudentMessages");
-    const tabPartBtn = document.getElementById("tabStudentParticipants");
-    const micBtn = document.getElementById("btnStudentMicToggle");
-    const camBtn = document.getElementById("btnStudentCamToggle");
-
-    function updateStudentMediaButtonsUI() {
-      if (hostLockedMedia) {
-        micBtn.innerHTML = `<i class="fa-solid fa-lock"></i> Mic Disabled`;
-        micBtn.style.background = "#450a0a";
-        micBtn.style.color = "#fca5a5";
-        camBtn.innerHTML = `<i class="fa-solid fa-lock"></i> Cam Disabled`;
-        camBtn.style.background = "#450a0a";
-        camBtn.style.color = "#fca5a5";
-        return;
-      }
-      micBtn.style.color = "#f8fafc";
-      micBtn.style.background = studentMicOn ? "#16a34a" : "#1e293b";
-      micBtn.innerHTML = studentMicOn
-        ? `<i class="fa-solid fa-microphone"></i> Mic On`
-        : `<i class="fa-solid fa-microphone-slash"></i> Mic Off`;
-
-      camBtn.style.color = "#f8fafc";
-      camBtn.style.background = studentCamOn ? "#16a34a" : "#1e293b";
-      camBtn.innerHTML = studentCamOn
-        ? `<i class="fa-solid fa-video"></i> Cam On`
-        : `<i class="fa-solid fa-video-slash"></i> Cam Off`;
-    }
-
-    function renderStudentRosterList(roster) {
-      if (!partTabEl) return;
-      partTabEl.innerHTML = "";
-      (roster || []).forEach((person) => {
-        const bg = getAvatarColor(person.name);
-        const row = document.createElement("div");
-        row.style.cssText = `
-          display: flex; align-items: center; justify-content: space-between;
-          background: #1e293b; border: 1px solid #334155; border-radius: 10px;
-          padding: 8px 10px; margin-bottom: 7px;
-        `;
-        row.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 9px; min-width: 0;">
-            <div style="width: 34px; height: 34px; border-radius: 50%; background: ${bg}; color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
-              ${person.avatar ? `<img src="${person.avatar}" style="width:100%;height:100%;object-fit:cover;" />` : escapeHtml(person.initials || getInitials(person.name))}
-            </div>
-            <div style="min-width: 0;">
-              <div style="font-size: 12.5px; font-weight: 600; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(person.name)}</div>
-              <div style="font-size: 10.5px; color: #94a3b8;">${person.isHost ? "Host" : "Participant"}</div>
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px; font-size: 11px;">
-            <span style="color: ${person.micOn ? "#22c55e" : "#64748b"};"><i class="fa-solid ${person.micOn ? "fa-microphone" : "fa-microphone-slash"}"></i></span>
-            <span style="color: ${person.camOn ? "#22c55e" : "#64748b"};"><i class="fa-solid ${person.camOn ? "fa-video" : "fa-video-slash"}"></i></span>
-          </div>
-        `;
-        partTabEl.appendChild(row);
-      });
-    }
-
-    async function syncStudentMediaStream() {
-      const pipBox = document.getElementById("iqraStudentSelfPip");
-      const pipVid = document.getElementById("iqraStudentSelfVideo");
-
-      if (!studentMicOn && !studentCamOn) {
-        if (studentLocalStream) {
-          studentLocalStream.getTracks().forEach((t) => t.stop());
-          studentLocalStream = null;
+      askHostExitOptions(
+        () => {
+          cleanupTeacherSession(false);
+          showLiveToast("You left the classroom. Students remain connected.");
+        },
+        () => {
+          cleanupTeacherSession(true);
+          showLiveToast("Live Class ended for all participants.");
         }
-        if (studentOutgoingCall) {
-          try { studentOutgoingCall.close(); } catch (e) {}
-          studentOutgoingCall = null;
-        }
-        if (pipBox) pipBox.style.display = "none";
-      } else {
-        try {
-          if (studentLocalStream) {
-            studentLocalStream.getTracks().forEach((t) => t.stop());
-          }
-          studentLocalStream = await navigator.mediaDevices.getUserMedia({
-            audio: studentMicOn,
-            video: studentCamOn
-          });
-          if (studentCamOn && pipBox && pipVid) {
-            pipVid.srcObject = studentLocalStream;
-            pipBox.style.display = "block";
-          } else if (pipBox) {
-            pipBox.style.display = "none";
-          }
-
-          if (studentPeer && studentLocalStream) {
-            if (studentOutgoingCall) {
-              try { studentOutgoingCall.close(); } catch (e) {}
-            }
-            studentOutgoingCall = studentPeer.call(roomId, studentLocalStream);
-          }
-        } catch (err) {
-          studentMicOn = false;
-          studentCamOn = false;
-          if (pipBox) pipBox.style.display = "none";
-          showLiveToast("Unable to access microphone or camera on this device.");
-        }
-      }
-
-      updateStudentMediaButtonsUI();
-      if (teacherConn && teacherConn.open) {
-        teacherConn.send({
-          type: "student-media-state",
-          micOn: studentMicOn,
-          camOn: studentCamOn
-        });
-      }
-    }
-
-    const startStudentConnection = () => {
-      studentPeer = new Peer();
-
-      studentPeer.on("open", () => {
-        teacherConn = studentPeer.connect(roomId, { reliable: true });
-
-        teacherConn.on("open", () => {
-          teacherConn.send({
-            type: "student-hello",
-            name: studentName,
-            micOn: studentMicOn,
-            camOn: studentCamOn
-          });
-          teacherConn.send({ type: "request-stream" });
-        });
-
-        teacherConn.on("data", (data) => {
-          if (!data) return;
-          if (data.type === "class-meta") {
-            const acEl = document.getElementById("iqraStudentHeaderAcademy");
-            const crEl = document.getElementById("iqraStudentHeaderCourse");
-            if (acEl && data.academyName) acEl.textContent = data.academyName;
-            if (crEl && data.courseTitle) crEl.textContent = data.courseTitle;
-          } else if (data.type === "roster-update") {
-            renderStudentRosterList(data.roster);
-          } else if (data.type === "host-control") {
-            if (data.action === "force-mute-mic") {
-              studentMicOn = false;
-              syncStudentMediaStream();
-              showLiveToast("The host muted your microphone.");
-            } else if (data.action === "force-stop-cam") {
-              studentCamOn = false;
-              syncStudentMediaStream();
-              showLiveToast("The host turned off your camera.");
-            } else if (data.action === "lock-media") {
-              hostLockedMedia = true;
-              studentMicOn = false;
-              studentCamOn = false;
-              syncStudentMediaStream();
-              showLiveToast("The host disabled your microphone and camera.");
-            } else if (data.action === "unlock-media") {
-              hostLockedMedia = false;
-              updateStudentMediaButtonsUI();
-              showLiveToast("The host re-enabled your microphone and camera.");
-            }
-          } else if (data.type === "class-ended") {
-            const statusEl = document.getElementById("iqraStudentStatusText");
-            const videoEl = document.getElementById("iqraStudentStreamVideo");
-            const waitEl = document.getElementById("iqraStudentWaitingState");
-            if (videoEl) videoEl.style.display = "none";
-            if (waitEl) waitEl.style.display = "block";
-            if (statusEl) statusEl.textContent = "The teacher has ended this live session.";
-          } else if (data.type === "chat-history" && Array.isArray(data.history)) {
-            data.history.forEach((m) => appendChatMessage(m.sender, m.text, false, m.isSystem));
-          } else if (data.type === "chat-message") {
-            if (data.sender !== studentName) {
-              appendChatMessage(data.sender, data.text, false, false);
-            }
-          } else if (data.type === "system-msg") {
-            appendChatMessage("System", data.text, false, true);
-          }
-        });
-
-        teacherConn.on("close", () => {
-          const statusEl = document.getElementById("iqraStudentStatusText");
-          if (statusEl) statusEl.textContent = "Disconnected from classroom.";
-        });
-      });
-
-      studentPeer.on("call", (call) => {
-        call.answer();
-        call.on("stream", (remoteStream) => {
-          const videoEl = document.getElementById("iqraStudentStreamVideo");
-          const waitEl = document.getElementById("iqraStudentWaitingState");
-          if (waitEl) waitEl.style.display = "none";
-          if (videoEl) {
-            videoEl.style.display = "block";
-            videoEl.srcObject = remoteStream;
-            videoEl.play().catch(() => {});
-          }
-        });
-      });
-    };
-
-    const nameInput = document.getElementById("iqraStudentNameInput");
-    const enterBtn = document.getElementById("btnEnterStudentClass");
-    const submitJoin = () => {
-      studentName = (nameInput.value || "").trim() || "Student";
-      document.getElementById("iqraStudentJoinGate").style.display = "none";
-      startStudentConnection();
-    };
-    enterBtn.onclick = submitJoin;
-    nameInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") submitJoin();
-    });
-
-    micBtn.onclick = async () => {
-      if (hostLockedMedia) {
-        showLiveToast("Your microphone is disabled by the host.");
-        return;
-      }
-      studentMicOn = !studentMicOn;
-      await syncStudentMediaStream();
-    };
-
-    camBtn.onclick = async () => {
-      if (hostLockedMedia) {
-        showLiveToast("Your camera is disabled by the host.");
-        return;
-      }
-      studentCamOn = !studentCamOn;
-      await syncStudentMediaStream();
-    };
-
-    tabMsgBtn.onclick = () => {
-      activeHostTab = "chat";
-      tabMsgBtn.style.background = "#0f172a";
-      tabMsgBtn.style.color = "#38bdf8";
-      tabMsgBtn.style.borderBottom = "2px solid #38bdf8";
-      tabPartBtn.style.background = "transparent";
-      tabPartBtn.style.color = "#94a3b8";
-      tabPartBtn.style.borderBottom = "none";
-      msgTabEl.style.display = "flex";
-      partTabEl.style.display = "none";
-      unreadMessages = 0;
-      updateUnreadBadge();
-    };
-
-    tabPartBtn.onclick = () => {
-      activeHostTab = "participants";
-      tabPartBtn.style.background = "#0f172a";
-      tabPartBtn.style.color = "#38bdf8";
-      tabPartBtn.style.borderBottom = "2px solid #38bdf8";
-      tabMsgBtn.style.background = "transparent";
-      tabMsgBtn.style.color = "#94a3b8";
-      tabMsgBtn.style.borderBottom = "none";
-      msgTabEl.style.display = "none";
-      partTabEl.style.display = "block";
-    };
-
-    const setStudentSidebarVisible = (visible) => {
-      isHostSidePanelOpen = visible;
-      sidebarEl.style.display = visible ? "flex" : "none";
-      if (visible && activeHostTab === "chat") {
-        unreadMessages = 0;
-      }
-      updateUnreadBadge();
-    };
-
-    document.getElementById("btnStudentToggleSidebar").onclick = () => setStudentSidebarVisible(!isHostSidePanelOpen);
-    document.getElementById("btnCloseStudentSidebar").onclick = () => setStudentSidebarVisible(false);
-
-    const studentChatInput = document.getElementById("iqraStudentChatInput");
-    const sendStudentMsg = () => {
-      const txt = (studentChatInput.value || "").trim();
-      if (!txt || !teacherConn || !teacherConn.open) return;
-      studentChatInput.value = "";
-      appendChatMessage(studentName, txt, true, false);
-      teacherConn.send({ type: "chat-message", sender: studentName, text: txt });
-    };
-    document.getElementById("btnSendStudentChat").onclick = sendStudentMsg;
-    studentChatInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") sendStudentMsg();
-    });
-
-    document.getElementById("btnStudentRaiseHand").onclick = () => {
-      if (teacherConn && teacherConn.open) {
-        teacherConn.send({ type: "raise-hand", studentName });
-        showLiveToast("Hand raised! The teacher has been notified.");
-      }
-    };
-
-    document.getElementById("btnStudentFullscreen").onclick = () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else {
-        document.exitFullscreen().catch(() => {});
-      }
+      );
     };
   }
 
@@ -2003,12 +1749,6 @@
     const liveBtn = document.getElementById("dockBtnLiveClass");
     if (liveBtn) {
       liveBtn.addEventListener("click", openHostLobbyModal);
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const joinRoom = params.get("liveClass");
-    if (joinRoom) {
-      joinStudentLiveClass(joinRoom);
     }
   });
 })();
