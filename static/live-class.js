@@ -1,7 +1,7 @@
 /* ==========================================================================
    IQRA ISLAMIC ACADEMY - HOST STUDIO & LIVE BROADCAST CONTROLLER
-   (Secure class.html Links, 12 Age/Gender Voice Filters, Video Shapes & Filters,
-    Spotlight Stage Control, Separate Audio/Video Locks, Kick & Dual Exit)
+   (Secure class.html Links, Student-Front Stage Switching, Low-Lag Mobile
+    Board Broadcast, 12 Age/Gender Voice Filters, Separate Audio/Video Locks)
    ========================================================================== */
 (function () {
   const ACADEMY_NAME = "Iqra Islamic Academy";
@@ -29,9 +29,8 @@
   let selectedMicId = "";
   let selectedCamId = "";
   let selectedVideoFilter = "none";
-  let selectedVideoShape = "rounded";
   let selectedVoicePreset = "natural";
-  let spotlightTargetId = "host"; // "host" or student peerId
+  let hostStageTargetId = "auto"; // "auto" (shows student when joined) | "host" | student peerId
 
   let isMicMuted = false;
   let isCamOff = false;
@@ -55,15 +54,6 @@
     { id: "bw", label: "Black & White Classic", css: "grayscale(1) contrast(1.18)" }
   ];
 
-  const VIDEO_SHAPES = [
-    { id: "rounded", label: "Rounded Square" },
-    { id: "circle", label: "Circle (Round)" },
-    { id: "heart", label: "Heart Shape" },
-    { id: "hexagon", label: "Hexagon Frame" },
-    { id: "oval", label: "Soft Oval" },
-    { id: "rect", label: "Full Rectangle" }
-  ];
-
   // Exact 12 Age & Gender Voice Filters + Natural Default
   const VOICE_PRESETS = [
     { id: "natural", label: "0. Natural Voice (Original)" },
@@ -81,7 +71,6 @@
     { id: "woman-60", label: "12. 60 Year Old Woman" }
   ];
 
-  // Build clean student classroom URL without index.html (points to lightweight class.html)
   function getStudentClassUrl(slug) {
     const loc = window.location;
     if (loc.hostname === "127.0.0.1" || loc.hostname === "localhost") {
@@ -128,35 +117,6 @@
     return palette[Math.abs(hash) % palette.length];
   }
 
-  function getShapeCssStyle(shapeId) {
-    if (shapeId === "circle") {
-      return "border-radius: 50%; aspect-ratio: 1 / 1; max-width: 85%; max-height: 85%;";
-    }
-    if (shapeId === "heart") {
-      return "aspect-ratio: 1 / 1; max-width: 86%; max-height: 86%; clip-path: polygon(50% 92%, 12% 58%, 4% 35%, 14% 14%, 32% 8%, 50% 22%, 68% 8%, 86% 14%, 96% 35%, 88% 58%);";
-    }
-    if (shapeId === "hexagon") {
-      return "aspect-ratio: 1 / 1; max-width: 86%; max-height: 86%; clip-path: polygon(25% 5%, 75% 5%, 98% 50%, 75% 95%, 25% 95%, 2% 50%);";
-    }
-    if (shapeId === "oval") {
-      return "border-radius: 50%; width: 88%; height: 86%;";
-    }
-    if (shapeId === "rect") {
-      return "border-radius: 0px; width: 100%; height: 100%;";
-    }
-    return "border-radius: 16px; width: 100%; height: 100%;";
-  }
-
-  function applyShapeToHostStage() {
-    const box = document.getElementById("iqraHostStageFrame");
-    if (!box) return;
-    box.style.cssText = `
-      overflow: hidden; display: flex; align-items: center; justify-content: center;
-      background: #000000; position: relative; transition: all 0.25s ease;
-      ${getShapeCssStyle(selectedVideoShape)}
-    `;
-  }
-
   // Real-time Web Audio Pitch & Formant Processor for the 12 Age & Gender Voices
   function buildProcessedAudioTrack(inputMicStream, presetId) {
     if (!inputMicStream || !inputMicStream.getAudioTracks().length) return null;
@@ -173,7 +133,6 @@
     const source = audioCtx.createMediaStreamSource(inputMicStream);
     audioDestNode = audioCtx.createMediaStreamDestination();
 
-    // Formant & EQ sculpting filters
     const highpass = audioCtx.createBiquadFilter();
     highpass.type = "highpass";
     highpass.frequency.value = 60;
@@ -200,9 +159,6 @@
     highShelf.frequency.value = 3800;
     highShelf.gain.value = 0;
 
-    // Granular real-time pitch shifter via ScriptProcessor for true pitch ratio change
-    let pitchFactor = 1.0;
-
     const presets = {
       "natural": { pitch: 1.0, hp: 60, low: 0, f1Freq: 1000, f1Gain: 0, f2Freq: 2600, f2Gain: 0, high: 0 },
       "baby-6": { pitch: 1.52, hp: 220, low: -18, f1Freq: 1650, f1Gain: 9, f2Freq: 3400, f2Gain: 12, high: 10 },
@@ -220,7 +176,7 @@
     };
 
     const cfg = presets[presetId] || presets.natural;
-    pitchFactor = cfg.pitch;
+    const pitchFactor = cfg.pitch;
     highpass.frequency.value = cfg.hp;
     lowShelf.gain.value = cfg.low;
     formant1.frequency.value = cfg.f1Freq;
@@ -270,7 +226,6 @@
     return outTrack;
   }
 
-  // Real-time Filtered Video Stream
   function buildFilteredVideoStream(inputCamStream, filterId) {
     if (videoFilterLoopId) {
       cancelAnimationFrame(videoFilterLoopId);
@@ -309,33 +264,26 @@
     };
     drawFilteredFrame();
 
-    const filteredStream = canvas.captureStream(24);
+    const filteredStream = canvas.captureStream(20);
     filteredStream.getVideoTracks().forEach((t) => { t.enabled = !isCamOff; });
     return filteredStream;
   }
 
-  // Build active broadcast stream (Spotlight Student OR Board Share OR Host Camera + Processed Audio)
+  // Always broadcast Host's Screen/Board OR Host's Camera + Processed Voice to all students
   function getActiveBroadcastStream() {
     const combined = new MediaStream();
 
-    if (spotlightTargetId !== "host") {
-      const spotStudent = connectedStudents.get(spotlightTargetId);
-      if (spotStudent && spotStudent.incomingStream) {
-        spotStudent.incomingStream.getVideoTracks().forEach((t) => combined.addTrack(t));
-      }
-    } else {
-      const boardStream =
-        (localScreenStream && localScreenStream.active)
-          ? localScreenStream
-          : (canvasFallbackStream && canvasFallbackStream.active)
-            ? canvasFallbackStream
-            : null;
+    const boardStream =
+      (localScreenStream && localScreenStream.active)
+        ? localScreenStream
+        : (canvasFallbackStream && canvasFallbackStream.active)
+          ? canvasFallbackStream
+          : null;
 
-      if (boardStream) {
-        boardStream.getVideoTracks().forEach((t) => combined.addTrack(t));
-      } else if (processedVideoStream && processedVideoStream.active) {
-        processedVideoStream.getVideoTracks().forEach((t) => combined.addTrack(t));
-      }
+    if (boardStream) {
+      boardStream.getVideoTracks().forEach((t) => combined.addTrack(t));
+    } else if (!isCamOff && processedVideoStream && processedVideoStream.active) {
+      processedVideoStream.getVideoTracks().forEach((t) => combined.addTrack(t));
     }
 
     if (processedAudioStream && processedAudioStream.active) {
@@ -345,24 +293,28 @@
     return combined.getTracks().length > 0 ? combined : null;
   }
 
-  function createUniversalBoardCanvasStream() {
+  // Low-Lag Mobile & Tablet Board Canvas Stream (Caps resolution to 960px width & 10 FPS to prevent mobile CPU lag)
+  function createLowLagBoardCanvasStream() {
     if (canvasBroadcastTimer) clearInterval(canvasBroadcastTimer);
 
     const composite = document.createElement("canvas");
-    composite.width = 1280;
-    composite.height = 720;
-    const ctx = composite.getContext("2d");
+    const ctx = composite.getContext("2d", { alpha: false });
 
     const renderBoardFrame = () => {
       const vw = window.innerWidth || 1280;
       const vh = window.innerHeight || 720;
-      if (composite.width !== vw || composite.height !== vh) {
-        composite.width = vw;
-        composite.height = vh;
+      const maxW = 960;
+      const scale = vw > maxW ? maxW / vw : 1;
+      const targetW = Math.round(vw * scale);
+      const targetH = Math.round(vh * scale);
+
+      if (composite.width !== targetW || composite.height !== targetH) {
+        composite.width = targetW;
+        composite.height = targetH;
       }
 
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, vw, vh);
+      ctx.fillRect(0, 0, targetW, targetH);
 
       const canvases = document.querySelectorAll("canvas");
       canvases.forEach((c) => {
@@ -372,15 +324,15 @@
         const r = c.getBoundingClientRect();
         if (r.width > 40 && r.height > 40) {
           try {
-            ctx.drawImage(c, r.left, r.top, r.width, r.height);
+            ctx.drawImage(c, r.left * scale, r.top * scale, r.width * scale, r.height * scale);
           } catch (e) {}
         }
       });
     };
 
     renderBoardFrame();
-    canvasBroadcastTimer = setInterval(renderBoardFrame, 65);
-    return composite.captureStream(15);
+    canvasBroadcastTimer = setInterval(renderBoardFrame, 100); // Smooth 10 FPS without choking mobile CPU
+    return composite.captureStream(10);
   }
 
   function stopBoardSharingStreams() {
@@ -499,8 +451,14 @@
 
   function broadcastStreamToAllStudents() {
     const stream = getActiveBroadcastStream();
-    if (!stream || !classPeer) return;
+    const hasActiveVideo = Boolean(stream && stream.getVideoTracks().length > 0);
+    broadcastToAllStudents({
+      type: "host-stage-state",
+      hasActiveVideo,
+      teacherName: teacherDisplayName
+    });
 
+    if (!stream || !classPeer) return;
     connectedStudents.forEach((student, studentPeerId) => {
       try {
         if (student.mediaCall) student.mediaCall.close();
@@ -509,51 +467,154 @@
     });
   }
 
-  // Render Host Students List with Spotlight Pin, Separate Mic/Cam Locks, Mute, Cam Off & Kick
+  // Decide who appears on Host's front Main Stage:
+  // - By default ("auto"): shows first connected student when students are present; shows Host self-view when 0 students
+  // - Or shows whichever specific student/host the Host pinned
+  function resolveHostFrontTarget() {
+    if (hostStageTargetId === "host") return { mode: "host" };
+
+    if (hostStageTargetId !== "auto" && connectedStudents.has(hostStageTargetId)) {
+      return { mode: "student", pid: hostStageTargetId, student: connectedStudents.get(hostStageTargetId) };
+    }
+
+    if (connectedStudents.size > 0) {
+      const firstEntry = connectedStudents.entries().next().value;
+      return { mode: "student", pid: firstEntry[0], student: firstEntry[1] };
+    }
+
+    return { mode: "host" };
+  }
+
+  function refreshHostStagePreview() {
+    const preview = document.getElementById("iqraTeacherPreviewVideo");
+    const placeholder = document.getElementById("iqraTeacherPlaceholder");
+    if (!preview || !placeholder) return;
+
+    const front = resolveHostFrontTarget();
+
+    if (front.mode === "student" && front.student) {
+      const st = front.student;
+      const hasStudentVideo = st.camOn && st.incomingStream && st.incomingStream.getVideoTracks().length > 0;
+      if (hasStudentVideo) {
+        preview.srcObject = st.incomingStream;
+        preview.style.display = "block";
+        placeholder.style.display = "none";
+      } else {
+        preview.style.display = "none";
+        placeholder.style.display = "flex";
+        const bg = getAvatarColor(st.name);
+        placeholder.innerHTML = `
+          <div style="width: 72px; height: 72px; border-radius: 50%; background: ${bg}; color: #ffffff; font-size: 24px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; box-shadow: 0 6px 18px rgba(0,0,0,0.35);">
+            ${escapeHtml(getInitials(st.name))}
+          </div>
+          <div style="font-size: 14px; font-weight: 700; color: #f8fafc;">${escapeHtml(st.name)}</div>
+          <div style="font-size: 11.5px; color: #94a3b8; margin-top: 3px;">
+            ${st.micOn ? "Microphone Active" : "Camera & Microphone Off"}
+          </div>
+        `;
+      }
+      return;
+    }
+
+    // Host self-stage view (when 0 students or Host clicked "My Preview")
+    const isMobileCanvasSharing = Boolean(canvasFallbackStream && canvasFallbackStream.active);
+    if (isMobileCanvasSharing) {
+      // Avoid recursive mirror lag on mobile when sharing own board canvas
+      preview.style.display = "none";
+      placeholder.style.display = "flex";
+      placeholder.innerHTML = `
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(22, 163, 74, 0.16); color: #22c55e; font-size: 22px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+          <i class="fa-solid fa-display"></i>
+        </div>
+        <div style="font-size: 13.5px; font-weight: 700; color: #f8fafc;">Broadcasting Board Live</div>
+        <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Students are viewing your live whiteboard & PDF</div>
+      `;
+      return;
+    }
+
+    if (localScreenStream && localScreenStream.active) {
+      preview.srcObject = localScreenStream;
+      preview.style.display = "block";
+      placeholder.style.display = "none";
+      return;
+    }
+
+    if (!isCamOff && processedVideoStream && processedVideoStream.getVideoTracks().length > 0) {
+      preview.srcObject = processedVideoStream;
+      preview.style.display = "block";
+      placeholder.style.display = "none";
+      return;
+    }
+
+    preview.style.display = "none";
+    placeholder.style.display = "flex";
+    const hostInitials = getInitials(teacherDisplayName);
+    placeholder.innerHTML = `
+      <div id="iqraHostStageAvatar" style="width: 64px; height: 64px; border-radius: 50%; background: #0284c7; color: #ffffff; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; border: 2px solid #38bdf8; overflow: hidden;">
+        ${teacherAvatarDataUrl ? `<img src="${teacherAvatarDataUrl}" style="width:100%;height:100%;object-fit:cover;" />` : escapeHtml(hostInitials)}
+      </div>
+      <div style="font-size: 13px; font-weight: 700; color: #f8fafc;">${escapeHtml(teacherDisplayName)}</div>
+      <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Click <b>Share Board</b> below to broadcast your screen</div>
+    `;
+  }
+
+  // Render Host Right-Side Students Panel (Shows Host Self-Card + All Student Cards with Pin, Kick, Separate Mic/Cam Disable)
   function renderHostParticipantsList() {
     const listEl = document.getElementById("iqraHostParticipantsList");
     if (!listEl) return;
 
     listEl.innerHTML = "";
+    const front = resolveHostFrontTarget();
 
-    // Spotlight Return Banner if a student is currently pinned to main stage
-    if (spotlightTargetId !== "host") {
-      const banner = document.createElement("div");
-      banner.style.cssText = `
-        background: #0c4a6e; border: 1px solid #0284c7; border-radius: 10px;
-        padding: 7px 9px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;
-      `;
-      banner.innerHTML = `
-        <span style="font-size: 11px; font-weight: 700; color: #e0f2fe;">Student on Main Stage</span>
-        <button id="btnResetHostSpotlight" type="button" style="background: #0284c7; color: #fff; border: none; border-radius: 6px; padding: 3px 8px; font-size: 10.5px; font-weight: 700; cursor: pointer;">
-          Show Host
-        </button>
-      `;
-      listEl.appendChild(banner);
-      document.getElementById("btnResetHostSpotlight").onclick = () => {
-        spotlightTargetId = "host";
-        refreshHostStagePreview();
-        broadcastStreamToAllStudents();
-        renderHostParticipantsList();
-      };
-    }
+    // 1. Host's Own Self-Card at top of right panel (allows switching front stage back to Host preview)
+    const hostSelfCard = document.createElement("div");
+    const isHostFront = front.mode === "host";
+    hostSelfCard.style.cssText = `
+      background: #1e293b; border: 1.5px solid ${isHostFront ? "#38bdf8" : "#334155"}; border-radius: 11px;
+      padding: 7px 9px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    `;
+    hostSelfCard.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+        <div style="width: 30px; height: 30px; border-radius: 50%; background: #0284c7; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
+          ${teacherAvatarDataUrl ? `<img src="${teacherAvatarDataUrl}" style="width:100%;height:100%;object-fit:cover;" />` : escapeHtml(getInitials(teacherDisplayName))}
+        </div>
+        <div style="min-width: 0;">
+          <div style="font-size: 11.5px; font-weight: 700; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(teacherDisplayName)} (You)</div>
+          <div style="font-size: 10px; color: #94a3b8;">Host Broadcast</div>
+        </div>
+      </div>
+      <button id="btnFocusHostSelfStage" type="button" style="
+        background: ${isHostFront ? "#0284c7" : "#334155"}; color: #fff; border: none;
+        border-radius: 6px; padding: 4px 7px; font-size: 10px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+      ">
+        ${isHostFront ? "In Front" : "My View"}
+      </button>
+    `;
+    listEl.appendChild(hostSelfCard);
+
+    document.getElementById("btnFocusHostSelfStage").onclick = () => {
+      hostStageTargetId = "host";
+      refreshHostStagePreview();
+      renderHostParticipantsList();
+    };
 
     if (connectedStudents.size === 0) {
       const empty = document.createElement("div");
-      empty.style.cssText = "text-align: center; color: #64748b; font-size: 12px; padding: 26px 12px;";
+      empty.style.cssText = "text-align: center; color: #64748b; font-size: 12px; padding: 22px 10px;";
       empty.innerHTML = `
-        <i class="fa-solid fa-users" style="font-size: 22px; margin-bottom: 8px; display: block; color: #334155;"></i>
+        <i class="fa-solid fa-users" style="font-size: 20px; margin-bottom: 6px; display: block; color: #334155;"></i>
         No students have joined yet. Share the classroom link to begin.
       `;
       listEl.appendChild(empty);
       return;
     }
 
+    // 2. Connected Students Cards
     connectedStudents.forEach((student, pid) => {
       const card = document.createElement("div");
-      const isSpotlighted = spotlightTargetId === pid;
+      const isFront = front.mode === "student" && front.pid === pid;
       card.style.cssText = `
-        background: #1e293b; border: 1.5px solid ${isSpotlighted ? "#38bdf8" : "#334155"}; border-radius: 12px;
+        background: #1e293b; border: 1.5px solid ${isFront ? "#38bdf8" : "#334155"}; border-radius: 12px;
         padding: 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px;
       `;
 
@@ -562,9 +623,9 @@
       const hasLiveVideo = student.camOn && student.incomingStream && student.incomingStream.getVideoTracks().length > 0;
 
       card.innerHTML = `
-        <div style="position: relative; width: 100%; height: 90px; border-radius: 9px; background: #0f172a; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+        <div style="position: relative; width: 100%; height: 88px; border-radius: 9px; background: #0f172a; overflow: hidden; display: flex; align-items: center; justify-content: center;">
           <video id="hostStudentVid_${pid}" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; display: ${hasLiveVideo ? "block" : "none"};"></video>
-          <div style="display: ${hasLiveVideo ? "none" : "flex"}; width: 44px; height: 44px; border-radius: 50%; background: ${bg}; color: #ffffff; font-size: 15px; font-weight: 800; align-items: center; justify-content: center;">
+          <div style="display: ${hasLiveVideo ? "none" : "flex"}; width: 42px; height: 42px; border-radius: 50%; background: ${bg}; color: #ffffff; font-size: 15px; font-weight: 800; align-items: center; justify-content: center;">
             ${escapeHtml(initials)}
           </div>
           <div style="position: absolute; bottom: 4px; left: 6px; right: 6px; display: flex; align-items: center; justify-content: space-between; background: rgba(15,23,42,0.82); padding: 2px 7px; border-radius: 6px;">
@@ -578,10 +639,10 @@
         <!-- Row 1: Pin to Front Stage + Remove Student -->
         <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 4px;">
           <button type="button" data-act="spotlight" data-pid="${pid}" style="
-            background: ${isSpotlighted ? "#0284c7" : "#334155"}; color: #f8fafc; border: none;
+            background: ${isFront ? "#0284c7" : "#334155"}; color: #f8fafc; border: none;
             border-radius: 6px; padding: 4px 4px; font-size: 10px; font-weight: 700; cursor: pointer;
           ">
-            <i class="fa-solid fa-thumbtack"></i> ${isSpotlighted ? "On Stage" : "Pin Front"}
+            <i class="fa-solid fa-thumbtack"></i> ${isFront ? "In Front" : "Pin Front"}
           </button>
           <button type="button" data-act="kick-student" data-pid="${pid}" style="
             background: #7f1d1d; color: #fecaca; border: none;
@@ -631,9 +692,8 @@
         if (!st || !st.conn || !st.conn.open) return;
 
         if (act === "spotlight") {
-          spotlightTargetId = spotlightTargetId === pid ? "host" : pid;
+          hostStageTargetId = pid;
           refreshHostStagePreview();
-          broadcastStreamToAllStudents();
         } else if (act === "toggle-lock-mic") {
           st.micLocked = !st.micLocked;
           if (st.micLocked) st.micOn = false;
@@ -656,7 +716,7 @@
             try { st.conn.close(); } catch (e) {}
             if (st.mediaCall) { try { st.mediaCall.close(); } catch (e) {} }
             connectedStudents.delete(pid);
-            if (spotlightTargetId === pid) spotlightTargetId = "host";
+            if (hostStageTargetId === pid) hostStageTargetId = "auto";
             updateStudentCountBadge();
             renderHostParticipantsList();
             syncRosterToAllStudents();
@@ -721,50 +781,7 @@
     syncRosterToAllStudents();
   }
 
-  function refreshHostStagePreview() {
-    const preview = document.getElementById("iqraTeacherPreviewVideo");
-    const placeholder = document.getElementById("iqraTeacherPlaceholder");
-    if (!preview || !placeholder) return;
-
-    applyShapeToHostStage();
-
-    // If Host pinned a student to front Main Stage
-    if (spotlightTargetId !== "host") {
-      const spotStudent = connectedStudents.get(spotlightTargetId);
-      if (spotStudent && spotStudent.incomingStream) {
-        preview.srcObject = spotStudent.incomingStream;
-        preview.style.display = "block";
-        placeholder.style.display = "none";
-        return;
-      }
-    }
-
-    const screenOrCanvas =
-      (localScreenStream && localScreenStream.active)
-        ? localScreenStream
-        : (canvasFallbackStream && canvasFallbackStream.active)
-          ? canvasFallbackStream
-          : null;
-
-    if (screenOrCanvas) {
-      preview.srcObject = screenOrCanvas;
-      preview.style.display = "block";
-      placeholder.style.display = "none";
-      return;
-    }
-
-    if (!isCamOff && processedVideoStream && processedVideoStream.getVideoTracks().length > 0) {
-      preview.srcObject = processedVideoStream;
-      preview.style.display = "block";
-      placeholder.style.display = "none";
-      return;
-    }
-
-    preview.style.display = "none";
-    placeholder.style.display = "flex";
-  }
-
-  // Settings Modal: Mic, Camera, Video Filter, Video Frame Shape, 12 Age/Gender Voice Filters & Profile Photo
+  // Settings Modal: Mic, Camera, Video Filter, 12 Age/Gender Voice Filters & Profile Photo
   async function openHostDeviceSettingsModal() {
     const existing = document.getElementById("iqraLiveSettingsModal");
     if (existing) existing.remove();
@@ -798,18 +815,14 @@
       (f) => `<option value="${f.id}" ${f.id === selectedVideoFilter ? "selected" : ""}>${escapeHtml(f.label)}</option>`
     ).join("");
 
-    const videoShapeOptions = VIDEO_SHAPES.map(
-      (s) => `<option value="${s.id}" ${s.id === selectedVideoShape ? "selected" : ""}>${escapeHtml(s.label)}</option>`
-    ).join("");
-
     const voicePresetOptions = VOICE_PRESETS.map(
       (v) => `<option value="${v.id}" ${v.id === selectedVoicePreset ? "selected" : ""}>${escapeHtml(v.label)}</option>`
     ).join("");
 
     modal.innerHTML = `
-      <div style="background: #ffffff; width: 420px; max-width: 94vw; max-height: 90vh; overflow-y: auto; border-radius: 16px; padding: 20px; box-shadow: 0 20px 44px rgba(0,0,0,0.3); position: relative;">
+      <div style="background: #ffffff; width: 410px; max-width: 94vw; max-height: 90vh; overflow-y: auto; border-radius: 16px; padding: 20px; box-shadow: 0 20px 44px rgba(0,0,0,0.3); position: relative;">
         <button id="closeHostSettingsModal" type="button" style="position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; border-radius: 50%; border: none; background: #f1f5f9; color: #475569; cursor: pointer;">✕</button>
-        <h4 style="margin: 0 0 14px; font-size: 16px; font-weight: 800; color: #0f172a;">Studio Audio, Video, Shape & Voice Settings</h4>
+        <h4 style="margin: 0 0 14px; font-size: 16px; font-weight: 800; color: #0f172a;">Studio Audio, Video & Voice Settings</h4>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
           <div>
@@ -826,19 +839,13 @@
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
-          <div>
-            <label style="display: block; font-size: 11px; font-weight: 700; color: #0284c7; margin-bottom: 4px;">Live Video Filter</label>
-            <select id="iqraVideoFilterSelect" style="width: 100%; padding: 8px; border: 1.5px solid #bae6fd; background: #f0f9ff; border-radius: 9px; font-size: 12px; font-weight: 600; color: #0f172a;">
-              ${videoFilterOptions}
-            </select>
-          </div>
-          <div>
-            <label style="display: block; font-size: 11px; font-weight: 700; color: #7c3aed; margin-bottom: 4px;">Video Frame Shape</label>
-            <select id="iqraVideoShapeSelect" style="width: 100%; padding: 8px; border: 1.5px solid #ddd6fe; background: #f5f3ff; border-radius: 9px; font-size: 12px; font-weight: 600; color: #0f172a;">
-              ${videoShapeOptions}
-            </select>
-          </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-size: 11.5px; font-weight: 700; color: #0284c7; margin-bottom: 4px;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Live Video Filter
+          </label>
+          <select id="iqraVideoFilterSelect" style="width: 100%; padding: 8px 10px; border: 1.5px solid #bae6fd; background: #f0f9ff; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0f172a;">
+            ${videoFilterOptions}
+          </select>
         </div>
 
         <div style="margin-bottom: 12px;">
@@ -879,22 +886,17 @@
       selectedMicId = document.getElementById("iqraMicSelect").value;
       selectedCamId = document.getElementById("iqraCamSelect").value;
       selectedVideoFilter = document.getElementById("iqraVideoFilterSelect").value;
-      selectedVideoShape = document.getElementById("iqraVideoShapeSelect").value;
       selectedVoicePreset = document.getElementById("iqraVoicePresetSelect").value;
       modal.remove();
 
       const headerAvatar = document.getElementById("iqraHostHeaderAvatar");
-      const stageAvatar = document.getElementById("iqraHostStageAvatar");
-      if (teacherAvatarDataUrl) {
-        if (headerAvatar) headerAvatar.src = teacherAvatarDataUrl;
-        if (stageAvatar) {
-          stageAvatar.innerHTML = `<img src="${teacherAvatarDataUrl}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />`;
-        }
+      if (teacherAvatarDataUrl && headerAvatar) {
+        headerAvatar.src = teacherAvatarDataUrl;
       }
 
-      broadcastToAllStudents({ type: "video-shape", shape: selectedVideoShape });
       await acquireHostMedia(selectedMicId, selectedCamId);
-      showLiveToast("Studio video shape, voice filter & device settings applied.");
+      renderHostParticipantsList();
+      showLiveToast("Video filter, voice preset & device settings applied.");
     };
   }
 
@@ -990,7 +992,7 @@
     isCamOff = false;
     isWallMinimized = false;
     isFullSizePanel = false;
-    spotlightTargetId = "host";
+    hostStageTargetId = "auto";
     unreadMessages = 0;
 
     const panel = document.getElementById("iqraLiveClassPanel");
@@ -1093,7 +1095,7 @@
     }
   }
 
-  // Step 1: Host Lobby Modal (Permanent Link or Generate New Link on Host's Choice)
+  // Step 1: Host Lobby Modal
   function openHostLobbyModal() {
     if (isHostingActive) {
       toggleLeftWallMinimize(false);
@@ -1303,15 +1305,9 @@
       <!-- Main Stage + Right Participants/Chat Panel -->
       <div style="flex: 1; display: flex; overflow: hidden; background: #020617;">
         <div id="iqraLiveFrameWrap" style="position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 8px;">
-          <div id="iqraHostStageFrame" style="width: 100%; height: 100%; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000000; position: relative;">
+          <div style="width: 100%; height: 100%; border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000000; position: relative;">
             <video id="iqraTeacherPreviewVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: contain; display: none; background: #000;"></video>
-            <div id="iqraTeacherPlaceholder" style="display: flex; flex-direction: column; align-items: center; text-align: center; color: #94a3b8; padding: 16px;">
-              <div id="iqraHostStageAvatar" style="width: 64px; height: 64px; border-radius: 50%; background: #0284c7; color: #ffffff; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; border: 2px solid #38bdf8; overflow: hidden;">
-                ${teacherAvatarDataUrl ? `<img src="${teacherAvatarDataUrl}" style="width:100%;height:100%;object-fit:cover;" />` : escapeHtml(hostInitials)}
-              </div>
-              <div style="font-size: 13px; font-weight: 700; color: #f8fafc;">${escapeHtml(teacherDisplayName)}</div>
-              <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Click <b>Share Board</b> below to broadcast your screen</div>
-            </div>
+            <div id="iqraTeacherPlaceholder" style="display: flex; flex-direction: column; align-items: center; text-align: center; color: #94a3b8; padding: 16px;"></div>
           </div>
         </div>
 
@@ -1356,7 +1352,7 @@
         <button id="btnShareBoardScreen" type="button" style="background: #16a34a; color: #ffffff; border: none; border-radius: 8px; padding: 5px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
           <i class="fa-solid fa-display"></i> Share Board
         </button>
-        <button id="btnHostDeviceSettings" type="button" title="Audio, Video, Shape & Voice Settings" style="background: #334155; color: #f8fafc; border: none; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
+        <button id="btnHostDeviceSettings" type="button" title="Audio, Video & Voice Settings" style="background: #334155; color: #f8fafc; border: none; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
           <i class="fa-solid fa-gear"></i>
         </button>
       </div>
@@ -1365,6 +1361,7 @@
     document.body.appendChild(container);
     makeElementDraggable(container, document.getElementById("iqraLiveClassHeader"));
     renderHostParticipantsList();
+    refreshHostStagePreview();
 
     if (!classPeer || classPeer.destroyed) {
       classPeer = new Peer(activeRoomSlug);
@@ -1389,10 +1386,7 @@
           if (entry) {
             entry.incomingStream = studentStream;
             renderHostParticipantsList();
-            if (spotlightTargetId === incomingCall.peer) {
-              refreshHostStagePreview();
-              broadcastStreamToAllStudents();
-            }
+            refreshHostStagePreview();
           }
         });
       });
@@ -1411,19 +1405,21 @@
           });
           updateStudentCountBadge();
           renderHostParticipantsList();
+          refreshHostStagePreview();
 
           conn.send({
             type: "class-meta",
             academyName: ACADEMY_NAME,
             courseTitle,
             teacherName: teacherDisplayName,
-            teacherAvatar: teacherAvatarDataUrl,
-            videoShape: selectedVideoShape
+            teacherAvatar: teacherAvatarDataUrl
           });
           conn.send({ type: "chat-history", history: chatHistory.slice(-30) });
           syncRosterToAllStudents();
 
           const stream = getActiveBroadcastStream();
+          const hasActiveVideo = Boolean(stream && stream.getVideoTracks().length > 0);
+          conn.send({ type: "host-stage-state", hasActiveVideo, teacherName: teacherDisplayName });
           if (stream) {
             const call = classPeer.call(conn.peer, stream);
             const entry = connectedStudents.get(conn.peer);
@@ -1443,6 +1439,7 @@
               entry.camOn = Boolean(data.camOn);
             }
             renderHostParticipantsList();
+            refreshHostStagePreview();
             syncRosterToAllStudents();
             appendChatMessage("System", `${sName} joined the class.`, false, true);
             broadcastToAllStudents({ type: "system-msg", text: `${sName} joined the class.` });
@@ -1452,6 +1449,7 @@
               entry.micOn = Boolean(data.micOn);
               entry.camOn = Boolean(data.camOn);
               renderHostParticipantsList();
+              refreshHostStagePreview();
               syncRosterToAllStudents();
             }
           } else if (data.type === "chat-message") {
@@ -1474,7 +1472,7 @@
           const entry = connectedStudents.get(conn.peer);
           const leftName = (entry && entry.name) || "Student";
           connectedStudents.delete(conn.peer);
-          if (spotlightTargetId === conn.peer) spotlightTargetId = "host";
+          if (hostStageTargetId === conn.peer) hostStageTargetId = "auto";
           updateStudentCountBadge();
           renderHostParticipantsList();
           syncRosterToAllStudents();
@@ -1483,16 +1481,15 @@
         });
       });
     } else {
-      // Host rejoined existing open room
       updateStudentCountBadge();
       renderHostParticipantsList();
+      refreshHostStagePreview();
       broadcastToAllStudents({
         type: "class-meta",
         academyName: ACADEMY_NAME,
         courseTitle,
         teacherName: teacherDisplayName,
-        teacherAvatar: teacherAvatarDataUrl,
-        videoShape: selectedVideoShape
+        teacherAvatar: teacherAvatarDataUrl
       });
     }
 
@@ -1621,6 +1618,7 @@
         : `<i class="fa-solid fa-video"></i> Cam`;
       camBtn.style.background = isCamOff ? "#dc2626" : "#334155";
       refreshHostStagePreview();
+      broadcastStreamToAllStudents();
       syncRosterToAllStudents();
     };
 
@@ -1644,7 +1642,7 @@
       if (canUseOsDisplayMedia) {
         try {
           localScreenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: { ideal: 30, max: 30 } },
+            video: { frameRate: { ideal: 24, max: 30 } },
             audio: false
           });
           const track = localScreenStream.getVideoTracks()[0];
@@ -1668,12 +1666,13 @@
         }
       }
 
-      canvasFallbackStream = createUniversalBoardCanvasStream();
+      // Low-Lag Mobile & Tablet Board Stream
+      canvasFallbackStream = createLowLagBoardCanvasStream();
       shareBtn.innerHTML = `<i class="fa-solid fa-stop"></i> Stop Board`;
       shareBtn.style.background = "#d97706";
       refreshHostStagePreview();
       broadcastStreamToAllStudents();
-      showLiveToast("Broadcasting whiteboard & PDF live.");
+      showLiveToast("Broadcasting whiteboard & PDF smoothly.");
     };
 
     document.getElementById("btnHostDeviceSettings").onclick = openHostDeviceSettingsModal;
