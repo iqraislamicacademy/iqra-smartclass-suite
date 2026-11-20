@@ -1,8 +1,8 @@
 /* ==========================================================================
-   IQRA SMARTCLASS SUITE - FULL HD LOW-LATENCY MIRROR & UNIVERSAL PEN/UI SYNC
+   IQRA SMARTCLASS SUITE - UNIVERSAL REMOTE CONTROL & HYBRID MIRROR SYNC
+   (PC Full-HD Display Capture + Zero-Lag Android-to-Android Hardware Stream)
    ========================================================================== */
 (function () {
-  // Keep "" for GitHub / Render live site. For local Wi-Fi testing only, put your PC IP URL.
   const LOCAL_TEST_URL = "";
 
   let peer = null;
@@ -10,8 +10,8 @@
   let fastConn = null;
   let mediaCall = null;
   let pcScreenStream = null;
-  let boardSyncTimer = null;
-  let lastFrameHash = "";
+  let androidBoardStream = null;
+  let androidRenderLoopId = null;
 
   let activePointerTarget = null;
   let activeDownUiTarget = null;
@@ -72,7 +72,6 @@
     });
   }
 
-  // Clean English Confirmation Modal before Disconnecting (Host only)
   function askDisconnectConfirmation(onConfirm) {
     const existing = document.getElementById("iqraDisconnectConfirmModal");
     if (existing) existing.remove();
@@ -107,7 +106,6 @@
     `;
 
     document.body.appendChild(overlay);
-
     document.getElementById("iqraCancelDisconnectBtn").onclick = () => overlay.remove();
     document.getElementById("iqraConfirmDisconnectBtn").onclick = () => {
       overlay.remove();
@@ -115,7 +113,6 @@
     };
   }
 
-  // Subtle Bottom-Left Disconnect Button (Host PC / Digital Board only)
   function toggleHostDisconnectButton(show) {
     let btn = document.getElementById("iqraCornerDisconnectBtn");
     if (!show) {
@@ -147,23 +144,24 @@
       e.stopPropagation();
       btn.style.opacity = "0.95";
       askDisconnectConfirmation(() => {
-        cleanupHostSession("🛑 Tablet Sync Disconnected");
+        cleanupHostSession("Tablet Sync Disconnected");
       });
     };
 
     document.body.appendChild(btn);
   }
 
-  // Cleanly terminate host session and notify tablet
   function cleanupHostSession(notifyMsg) {
     toggleHostDisconnectButton(false);
 
-    if (boardSyncTimer) {
-      clearInterval(boardSyncTimer);
-      boardSyncTimer = null;
+    if (androidRenderLoopId) {
+      clearInterval(androidRenderLoopId);
+      androidRenderLoopId = null;
     }
-    lastFrameHash = "";
-
+    if (androidBoardStream) {
+      androidBoardStream.getTracks().forEach((t) => t.stop());
+      androidBoardStream = null;
+    }
     if (pcScreenStream) {
       pcScreenStream.getTracks().forEach((track) => track.stop());
       pcScreenStream = null;
@@ -192,7 +190,6 @@
     if (notifyMsg) showToast(notifyMsg);
   }
 
-  // QR Code + 6-Digit Room ID Modal (Host & Join)
   function createSyncModal() {
     if (document.getElementById("iqraTabletSyncModal")) return;
 
@@ -250,7 +247,7 @@
     const handleJoinByCode = () => {
       const raw = (joinInput.value || "").trim().replace(/[^0-9]/g, "");
       if (raw.length < 4) {
-        showToast("⚠️ Please enter the 6-digit Room ID shown on host screen.");
+        showToast("Please enter the 6-digit Room ID shown on host screen.");
         return;
       }
       modal.style.display = "none";
@@ -264,7 +261,6 @@
     });
   }
 
-  // HOST MODE (PC or Android Digital Board)
   function startHostSession() {
     createSyncModal();
     const modal = document.getElementById("iqraTabletSyncModal");
@@ -294,7 +290,7 @@
           Room ID: <b style="font-size: 18px; letter-spacing: 2px; color: #0284c7; background: #e0f2fe; padding: 2px 10px; border-radius: 6px;">${codeNum}</b>
         </div>
         <button id="copySyncJoinUrlBtn" type="button" style="background:#e2e8f0; color:#1e293b; border:none; padding:5px 12px; border-radius:8px; font-size:11.5px; font-weight:600; cursor:pointer;">
-          📋 Copy Join Link
+          Copy Join Link
         </button>
       `;
 
@@ -325,8 +321,8 @@
       if (copyBtn) {
         copyBtn.onclick = () => {
           navigator.clipboard.writeText(joinUrl).then(() => {
-            copyBtn.textContent = "✅ Link Copied!";
-            setTimeout(() => { copyBtn.textContent = "📋 Copy Join Link"; }, 2000);
+            copyBtn.textContent = "Link Copied!";
+            setTimeout(() => { copyBtn.textContent = "Copy Join Link"; }, 2000);
           });
         };
       }
@@ -342,7 +338,7 @@
       conn = connection;
       badge.style.background = "#dcfce7";
       badge.style.color = "#15803d";
-      badge.textContent = "● Tablet Connected! Please click 'Share' on PC...";
+      badge.textContent = "● Tablet Connected! Starting sync...";
 
       conn.on("data", (data) => {
         if (data.type === "request-stream") {
@@ -355,7 +351,7 @@
       });
 
       conn.on("close", () => {
-        cleanupHostSession("⚠️ Tablet Disconnected");
+        cleanupHostSession("Tablet Disconnected");
       });
     });
 
@@ -364,7 +360,6 @@
     });
   }
 
-  // Receive image/PDF selected on Tablet and feed it into Host's file input
   function handleRemoteFileDropOnHost(data) {
     try {
       const byteString = atob(data.base64.split(",")[1]);
@@ -389,15 +384,14 @@
       if (targetInput) {
         targetInput.files = dt.files;
         targetInput.dispatchEvent(new Event("change", { bubbles: true }));
-        showToast(`✅ Loaded ${data.fileName} from Tablet!`);
+        showToast(`Loaded ${data.fileName} from Tablet.`);
       }
     } catch (e) {
-      showToast("⚠️ Could not load file from Tablet.");
+      showToast("Could not load file from Tablet.");
     }
   }
 
-  // Boost WebRTC sender video bitrate to 6 Mbps immediately so Full HD sharpness appears from second 1
-  function boostVideoBitrate(call) {
+  function boostVideoBitrate(call, maxBps) {
     try {
       const pc = call.peerConnection;
       if (!pc) return;
@@ -408,7 +402,7 @@
             if (!params.encodings || !params.encodings.length) {
               params.encodings = [{}];
             }
-            params.encodings[0].maxBitrate = 6000000; // 6 Mbps Full HD crispness immediately
+            params.encodings[0].maxBitrate = maxBps;
             params.encodings[0].maxFramerate = 30;
             params.degradationPreference = "maintain-resolution";
             sender.setParameters(params).catch(() => {});
@@ -420,7 +414,155 @@
     } catch (e) {}
   }
 
-  // Hybrid Broadcast: Instant Full HD Video on PC, Live PDF + Whiteboard Canvas Sync on Android Digital Board
+  // Draw visible UI overlays (Floating Dock, Toolkit, Top Text Toolbar, Modals, PDF Bottom Bar) onto Composite Canvas
+  function drawUiOverlaysToComposite(ctx, scale) {
+    const uiSelectors = [
+      "#floatingDock",
+      "#dockFullPanel",
+      ".pen-suite-flyout",
+      ".shapes-flyout-box",
+      ".math-flyout-box",
+      "#textToolBar",
+      "[id*='Toolbar' i]",
+      "[id*='Modal' i]",
+      "[class*='modal' i]",
+      "[id*='Gallery' i]",
+      "[id*='pdf' i]"
+    ];
+
+    const seen = new Set();
+    uiSelectors.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((el) => {
+        if (seen.has(el) || el.id === "iqraTabletSyncModal" || el.id === "iqraCornerDisconnectBtn") return;
+        seen.add(el);
+
+        const st = window.getComputedStyle(el);
+        if (st.display === "none" || st.visibility === "hidden" || st.opacity === "0" || el.classList.contains("hidden")) return;
+
+        const r = el.getBoundingClientRect();
+        if (r.width < 20 || r.height < 20 || r.width > window.innerWidth * 0.96) return;
+
+        const x = r.left * scale;
+        const y = r.top * scale;
+        const w = r.width * scale;
+        const h = r.height * scale;
+
+        ctx.save();
+        ctx.fillStyle = st.backgroundColor && st.backgroundColor !== "rgba(0, 0, 0, 0)" ? st.backgroundColor : "rgba(255, 255, 255, 0.96)";
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1.5 * scale;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(x, y, w, h, 12 * scale);
+        } else {
+          ctx.rect(x, y, w, h);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw interactive buttons & labels inside the UI box
+        const items = el.querySelectorAll("button, .tool-btn, .toolkit-item, .dock-item, .pen-type-btn, .shape-option-btn, .math-tool-btn, input, select, label");
+        items.forEach((btn) => {
+          const bst = window.getComputedStyle(btn);
+          if (bst.display === "none" || bst.visibility === "hidden") return;
+          const br = btn.getBoundingClientRect();
+          if (br.width < 8 || br.height < 8) return;
+
+          const bx = br.left * scale;
+          const by = br.top * scale;
+          const bw = br.width * scale;
+          const bh = br.height * scale;
+
+          ctx.fillStyle = bst.backgroundColor && bst.backgroundColor !== "rgba(0, 0, 0, 0)" ? bst.backgroundColor : "#f1f5f9";
+          ctx.strokeStyle = "#cbd5e1";
+          ctx.lineWidth = 1;
+          ctx.fillRect(bx, by, bw, bh);
+          ctx.strokeRect(bx, by, bw, bh);
+
+          const txt = (btn.textContent || btn.title || btn.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+          if (txt) {
+            ctx.fillStyle = bst.color || "#0f172a";
+            ctx.font = `600 ${Math.max(9, Math.round(11 * scale))}px system-ui, sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(txt.slice(0, 18), bx + bw / 2, by + bh / 2, bw - 4);
+          }
+        });
+        ctx.restore();
+      });
+    });
+  }
+
+  // Zero-Lag Hardware WebRTC Video Stream for Android-to-Android (Replaces slow Base64 DataChannel loop)
+  function createZeroLagAndroidHardwareStream() {
+    if (androidRenderLoopId) clearInterval(androidRenderLoopId);
+
+    const composite = document.createElement("canvas");
+    const ctx = composite.getContext("2d", { alpha: false });
+
+    const renderFrame = () => {
+      const vw = window.innerWidth || 1280;
+      const vh = window.innerHeight || 720;
+      const maxW = 960; // Prevents Android GPU/CPU overload and "Close or Wait" freeze
+      const scale = vw > maxW ? maxW / vw : 1;
+      const targetW = Math.round(vw * scale);
+      const targetH = Math.round(vh * scale);
+
+      if (composite.width !== targetW || composite.height !== targetH) {
+        composite.width = targetW;
+        composite.height = targetH;
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, targetW, targetH);
+
+      // 1. Draw all visible Canvases (Whiteboard, PDF pages, Annotation layer, 3D Earth WebGL canvas)
+      document.querySelectorAll("canvas").forEach((c) => {
+        if (c.id === "wbSnipPreviewCanvas") return;
+        const st = window.getComputedStyle(c);
+        if (st.display === "none" || st.visibility === "hidden" || c.classList.contains("hidden")) return;
+        const r = c.getBoundingClientRect();
+        if (r.width > 30 && r.height > 30) {
+          try {
+            ctx.drawImage(c, r.left * scale, r.top * scale, r.width * scale, r.height * scale);
+          } catch (e) {}
+        }
+      });
+
+      // 2. Draw visible Iframes' internal canvases (such as PDF Reader or 3D Earth iframe)
+      document.querySelectorAll("iframe").forEach((ifr) => {
+        const st = window.getComputedStyle(ifr);
+        if (st.display === "none" || st.visibility === "hidden") return;
+        const ir = ifr.getBoundingClientRect();
+        if (ir.width < 40 || ir.height < 40) return;
+        try {
+          const idoc = ifr.contentDocument;
+          if (!idoc) return;
+          idoc.querySelectorAll("canvas").forEach((ic) => {
+            const cr = ic.getBoundingClientRect();
+            if (cr.width > 20 && cr.height > 20) {
+              ctx.drawImage(
+                ic,
+                (ir.left + cr.left) * scale,
+                (ir.top + cr.top) * scale,
+                cr.width * scale,
+                cr.height * scale
+              );
+            }
+          });
+        } catch (e) {}
+      });
+
+      // 3. Draw Floating Dock, Tools, Modals & Controls so Android Client can see & tap them
+      drawUiOverlaysToComposite(ctx, scale);
+    };
+
+    renderFrame();
+    androidRenderLoopId = setInterval(renderFrame, 85); // ~12 FPS hardware-accelerated stream, zero CPU lockup
+    return composite.captureStream(12);
+  }
+
+  // Hybrid Broadcast: PC Full-HD Display Stream OR Android Zero-Lag Hardware Stream
   async function startHostBroadcast(tabletPeerId, modal) {
     const canCaptureScreen =
       navigator.mediaDevices &&
@@ -447,83 +589,39 @@
               try { videoTrack.contentHint = "detail"; } catch (e) {}
             }
             videoTrack.onended = () => {
-              cleanupHostSession("🛑 Screen Sharing & Tablet Sync Stopped");
+              cleanupHostSession("Screen Sharing & Tablet Sync Stopped");
             };
           }
         }
         modal.style.display = "none";
         toggleHostDisconnectButton(true);
         setTimeout(applyProportionalViewportFit, 150);
-        showToast("✅ Tablet Connected in Full HD! Press F11 on PC for Fullscreen.");
+        showToast("Tablet Connected in Full HD. Press F11 on PC for Fullscreen.");
 
         mediaCall = peer.call(tabletPeerId, pcScreenStream, {
           sdpTransform: (sdp) =>
             sdp.replace(/a=fmtp:(\d+) (.*)/g, "a=fmtp:$1 $2;x-google-min-bitrate=3000;x-google-start-bitrate=5000;x-google-max-bitrate=8000")
         });
-        boostVideoBitrate(mediaCall);
+        boostVideoBitrate(mediaCall, 6000000);
         return;
       } catch (err) {
         if (err && err.name === "NotAllowedError") {
           modal.style.display = "none";
-          cleanupHostSession("⚠️ Screen Sharing Cancelled");
+          cleanupHostSession("Screen Sharing Cancelled");
           return;
         }
       }
     }
 
+    // Android-to-Android Hardware Video Stream (Zero Base64 freeze, includes Board + Tools + PDF + 3D Earth)
     modal.style.display = "none";
     toggleHostDisconnectButton(true);
-    startBoardAndPdfCanvasSync();
-    showToast("✅ Board & PDF Sync Connected!");
+    androidBoardStream = createZeroLagAndroidHardwareStream();
+    mediaCall = peer.call(tabletPeerId, androidBoardStream);
+    boostVideoBitrate(mediaCall, 1800000); // 1.8 Mbps crisp & smooth for Android Wi-Fi
+    showToast("Board, PDF & Tools Sync Connected.");
   }
 
-  function startBoardAndPdfCanvasSync() {
-    if (boardSyncTimer) clearInterval(boardSyncTimer);
-
-    const composite = document.createElement("canvas");
-    const ctx = composite.getContext("2d");
-
-    const sendFrame = () => {
-      if (!conn || !conn.open) return;
-
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      if (composite.width !== vw || composite.height !== vh) {
-        composite.width = vw;
-        composite.height = vh;
-      }
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, vw, vh);
-
-      const allCanvases = document.querySelectorAll("canvas");
-      allCanvases.forEach((c) => {
-        if (c.id === "wbSnipPreviewCanvas") return;
-        const style = window.getComputedStyle(c);
-        if (style.display === "none" || style.visibility === "hidden" || c.classList.contains("hidden")) return;
-        const rect = c.getBoundingClientRect();
-        if (rect.width > 50 && rect.height > 50) {
-          try {
-            ctx.drawImage(c, rect.left, rect.top, rect.width, rect.height);
-          } catch (e) {}
-        }
-      });
-
-      const dataUrl = composite.toDataURL("image/webp", 0.78);
-      const sig = dataUrl.length + ":" + dataUrl.slice(-64);
-      if (sig !== lastFrameHash) {
-        lastFrameHash = sig;
-        try {
-          conn.send({ type: "canvas-frame", image: dataUrl });
-        } catch (e) {}
-      }
-    };
-
-    sendFrame();
-    boardSyncTimer = setInterval(sendFrame, 100);
-  }
-
-  // Deep hit-test: penetrates inside same-origin <iframe> (such as PDF Reader iframe)
   function deepElementFromPoint(x, y) {
     let el = document.elementFromPoint(x, y);
     let doc = document;
@@ -548,7 +646,6 @@
     return { el, doc, localX, localY };
   }
 
-  // Update <input type="range"> value proportionally from X coordinate
   function updateRangeSliderFromX(rangeEl, clientX) {
     if (!rangeEl || rangeEl.type !== "range") return;
     const rect = rangeEl.getBoundingClientRect();
@@ -654,7 +751,6 @@
     document.body.appendChild(box);
   }
 
-  // Find nearest scrollable ancestor (for Finger scrolling on PDF Viewer pages, Galleries, Maps Sidebar)
   function findScrollableAncestor(el, ownerDoc) {
     let curr = el;
     const win = (ownerDoc && ownerDoc.defaultView) || window;
@@ -704,7 +800,6 @@
     handle.click();
   }
 
-  // Detect Minimized Floating Dock Pill in bottom-right corner (Image 1 fix)
   function findMinimizedDockPill(x, y) {
     const dock = document.getElementById("floatingDock");
     if (dock) {
@@ -713,18 +808,15 @@
         return dock.querySelector("button, [role='button'], .dock-restore-btn, .dock-min-pill") || dock;
       }
     }
-    // Check any fixed bottom-right pill element
     if (x >= window.innerWidth - 180 && y >= window.innerHeight - 110) {
       const el = document.elementFromPoint(x, y);
       if (el && el !== document.body && el.tagName !== "CANVAS") {
-        const pill = el.closest("[id*='dock' i], [class*='dock' i], [id*='pill' i], [class*='pill' i], button") || el;
-        return pill;
+        return el.closest("[id*='dock' i], [class*='dock' i], [id*='pill' i], [class*='pill' i], button") || el;
       }
     }
     return null;
   }
 
-  // Universal UI Element Finder
   function findInteractiveUiElement(el, ownerDoc) {
     if (!el || el === ownerDoc.body || el === ownerDoc.documentElement) return null;
     if (el.tagName === "CANVAS") return null;
@@ -768,7 +860,6 @@
     return null;
   }
 
-  // Dispatch click on SVG or HTML element reliably
   function triggerUniversalClick(target, x, y, ownerDoc) {
     if (!target || target.tagName === "CANVAS") return;
     const win = (ownerDoc && ownerDoc.defaultView) || window;
@@ -794,7 +885,6 @@
     }
   }
 
-  // Execute remote Pen ("pen") vs Finger ("touch") and ALL UI interactions on Host
   function dispatchRemotePointerToPC(data) {
     if ((!conn || !conn.open) && (!fastConn || !fastConn.open)) return;
 
@@ -844,7 +934,6 @@
       activeIsDrawerHandle = Boolean(drawerHandle);
       activeRangeInput = rangeTarget;
       activeIsCanvasDraw = Boolean(hitEl && hitEl.tagName === "CANVAS" && !uiTarget && !rangeTarget);
-      // Only use drag-scrolling if NOT drawing with pen on a canvas (allows Pen drawing over PDF!)
       activeScrollContainer = activeIsCanvasDraw ? null : findScrollableAncestor(hitEl, ownerDoc);
       lastScrollClientY = y;
       activeIsUiControl = Boolean(uiTarget || rangeTarget);
@@ -873,7 +962,6 @@
         return;
       }
 
-      // Draw directly when gesture started on Whiteboard OR PDF annotationCanvas
       if (activeIsCanvasDraw) {
         const target = activePointerTarget || hitEl;
         if (target) {
@@ -883,7 +971,6 @@
         return;
       }
 
-      // Vertical drag-scrolling for non-canvas containers (PDF background, Galleries, Maps Sidebar)
       if (activeScrollContainer && (!activeIsUiControl || activeDownUiTarget === activeScrollContainer || !activeDownUiTarget)) {
         const dy = lastScrollClientY - y;
         if (Math.abs(dy) > 1) {
@@ -936,7 +1023,6 @@
               /insert\s*image|documents?\s*upload|upload\s*doc/i.test(labelText) ||
               /insertimage|uploaddoc|docupload/i.test(idText)
             ) {
-              // Trigger file picker directly on Tablet so user can pick Image/PDF from Tablet
               if (conn && conn.open) {
                 const isDoc = /doc|pdf/i.test(labelText + idText);
                 conn.send({ type: "open-tablet-file-picker", accept: isDoc ? ".pdf,application/pdf" : "image/*" });
@@ -958,10 +1044,9 @@
     }
   }
 
-  // Connect Client (Tablet) to a specific Room ID
   function connectToRoomId(roomId) {
     if (!roomId) return;
-    showToast("🔄 Connecting to Host Board...");
+    showToast("Connecting to Host Board...");
 
     peer = new Peer();
 
@@ -980,16 +1065,6 @@
           showTabletDisconnectedScreen();
         } else if (data.type === "open-tablet-file-picker") {
           triggerTabletFilePicker(data.accept || "image/*");
-        } else if (data.type === "canvas-frame" && data.image) {
-          const imgEl = document.getElementById("pcMirrorCanvasImg");
-          const vidEl = document.getElementById("pcMirrorVideo");
-          if (imgEl) {
-            imgEl.src = data.image;
-            imgEl.style.display = "block";
-          }
-          if (vidEl) {
-            vidEl.style.display = "none";
-          }
         }
       });
 
@@ -999,15 +1074,13 @@
     });
 
     peer.on("error", () => {
-      showToast("❌ Could not find Room ID. Check code and try again.");
+      showToast("Could not find Room ID. Check code and try again.");
     });
 
     peer.on("call", (call) => {
       call.answer();
       call.on("stream", (remoteStream) => {
         const videoEl = document.getElementById("pcMirrorVideo");
-        const imgEl = document.getElementById("pcMirrorCanvasImg");
-        if (imgEl) imgEl.style.display = "none";
         if (videoEl) {
           videoEl.style.display = "block";
           videoEl.srcObject = remoteStream;
@@ -1034,7 +1107,7 @@
     picker.onchange = () => {
       const file = picker.files && picker.files[0];
       if (!file || !conn || !conn.open) return;
-      showToast("📤 Sending file to Board...");
+      showToast("Sending file to Board...");
       const reader = new FileReader();
       reader.onload = () => {
         conn.send({
@@ -1098,11 +1171,11 @@
       padding: 2px 9px; border-radius: 12px; font-size: 10px;
       font-weight: 600; opacity: 0.4; z-index: 10000; pointer-events: none;
     `;
-    badge.textContent = "🟢 Live";
+    badge.textContent = "Live";
     document.body.appendChild(badge);
 
     const fsBtn = document.createElement("button");
-    fsBtn.textContent = "⛶ Fullscreen";
+    fsBtn.textContent = "Fullscreen";
     fsBtn.style.cssText = `
       position: fixed; top: 6px; left: 8px;
       background: rgba(15, 23, 42, 0.75); color: #fff; border: 1px solid rgba(255,255,255,0.25);
@@ -1130,15 +1203,6 @@
       object-fit: fill; background: #ffffff; z-index: 1;
     `;
     document.body.appendChild(video);
-
-    const canvasImg = document.createElement("img");
-    canvasImg.id = "pcMirrorCanvasImg";
-    canvasImg.alt = "Board Live Sync";
-    canvasImg.style.cssText = `
-      display: none; position: fixed; inset: 0; width: 100vw; height: 100vh;
-      object-fit: fill; background: #ffffff; z-index: 2; pointer-events: none;
-    `;
-    document.body.appendChild(canvasImg);
 
     const touchLayer = document.createElement("div");
     touchLayer.style.cssText = `
