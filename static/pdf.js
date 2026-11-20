@@ -1,11 +1,10 @@
 // ========================================================
 // IQRA SMARTCLASS SUITE - DOCUMENT & PDF ENGINE (pdf.js)
 // Complete & Verified:
-// 1. Graceful 60fps Bottom-Right Corner Paper-Curl Page Turn (950ms smooth speed)
-// 2. Opens PDFs in Full-Size ("doc-full") by default (both PC/Device Upload & Gallery Load)
-// 3. Fixes Top-Clip on Zoom (#docViewport block/inline-block scroll so top of page is NEVER cut off)
-// 4. Locks Grey Area & Pen Surface strictly to PDF page bounds
-// 5. Clickable PDF Hyperlinks + Per-Page Pen & Math Memory + Live Pinch/Wheel Zoom
+// 1. Fast Streaming PDF Load (URL.createObjectURL + Chunked Range Loading)
+// 2. Official "Loading Document — Please Wait..." Browsing Overlay
+// 3. Branded "Iqra SmartClass Suite" Top Document Header Badge
+// 4. 60fps Horizontal Depth Page Turn + Full-Size Open + Per-Page Pen/Math Memory
 // ========================================================
 (function (window) {
   "use strict";
@@ -15,7 +14,7 @@
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   }
 
-  // Scroll-Safe Viewport, Strict Page Bounds & Hyperlink Hover Styles
+  // Scroll-Safe Viewport, Strict Page Bounds, Hyperlink Hover & Brand Header Styles
   (function injectPdfStyles() {
     const oldStyle = document.getElementById("iqra-pdf-flip-styles");
     if (oldStyle) oldStyle.remove();
@@ -29,6 +28,7 @@
         overflow: auto !important;
         text-align: center !important;
         padding: 12px !important;
+        position: relative !important;
       }
       #docContainer {
         display: inline-block !important;
@@ -65,6 +65,129 @@
         background-color: rgba(2, 132, 199, 0.14);
         outline: 1.5px solid rgba(2, 132, 199, 0.55);
       }
+
+     /* Executive Minimal Header Brand Lockup */
+      #iqraDocHeaderBrand {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0 auto;
+        padding: 2px 10px;
+        font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        user-select: none;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      #iqraDocHeaderBrand .iqra-brand-mark {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: #0f172a;
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+      }
+      #iqraDocHeaderBrand .iqra-brand-title {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #0f172a;
+        letter-spacing: -0.2px;
+      }
+      #iqraDocHeaderBrand .iqra-brand-divider {
+        width: 1px;
+        height: 13px;
+        background: #cbd5e1;
+      }
+      #iqraDocHeaderBrand .iqra-brand-tag {
+        font-size: 10.5px;
+        font-weight: 600;
+        color: #64748b;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+      }
+      @media (max-width: 760px) {
+        #iqraDocHeaderBrand .iqra-brand-divider,
+        #iqraDocHeaderBrand .iqra-brand-tag {
+          display: none;
+        }
+        #iqraDocHeaderBrand .iqra-brand-title {
+          font-size: 12px;
+        }
+      }
+
+      /* Official Browsing / Document Loading Overlay */
+      #iqraDocLoadingOverlay {
+        position: absolute;
+        inset: 0;
+        z-index: 120;
+        background: rgba(248, 250, 252, 0.92);
+        backdrop-filter: blur(4px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      .iqra-doc-browser-card {
+        width: 320px;
+        max-width: 88vw;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 20px 22px;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+        text-align: center;
+      }
+      .iqra-doc-browser-dots {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .iqra-doc-browser-dots span {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+      .iqra-doc-spinner {
+        width: 38px;
+        height: 38px;
+        margin: 0 auto 12px;
+        border: 3.5px solid #e0f2fe;
+        border-top-color: #0284c7;
+        border-radius: 50%;
+        animation: iqraSpin 0.75s linear infinite;
+      }
+      .iqra-doc-progress-track {
+        width: 100%;
+        height: 5px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+        margin-top: 12px;
+      }
+      .iqra-doc-progress-bar {
+        width: 38%;
+        height: 100%;
+        background: linear-gradient(90deg, #0284c7, #2563eb);
+        border-radius: 999px;
+        animation: iqraBrowseSlide 1.15s ease-in-out infinite;
+      }
+      @keyframes iqraSpin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes iqraBrowseSlide {
+        0% { transform: translateX(-110%); }
+        100% { transform: translateX(280%); }
+      }
     `;
     document.head.appendChild(style);
   })();
@@ -91,6 +214,7 @@
   let uploadedFiles = [];
   const filePageMemory = new Map();
   const pdfPageDrawingsMemory = new Map();
+  const fileBlobUrlCache = new WeakMap();
 
   let activeFileIndex = -1;
   let currentPDF = null;
@@ -107,8 +231,88 @@
 
   let preTouchPenSnapshot = null;
 
+// ==========================================
+  // 00. TOP HEADER PROGRAM BRANDING & OFFICIAL LOADING OVERLAY
   // ==========================================
-  // 0. GRACEFUL 60FPS BOTTOM-RIGHT CORNER PAPER CURL ENGINE (950ms)
+  function injectProgramBrandInDocHeader() {
+    if (document.getElementById("iqraDocHeaderBrand")) return;
+    if (!docTitle || !docTitle.parentElement) return;
+
+    const headerBar = docTitle.parentElement;
+    const brandLockup = document.createElement("div");
+    brandLockup.id = "iqraDocHeaderBrand";
+    brandLockup.innerHTML = `
+      <span class="iqra-brand-mark">IQ</span>
+      <span class="iqra-brand-title">Iqra SmartClass</span>
+      <span class="iqra-brand-divider"></span>
+      <span class="iqra-brand-tag">Suite</span>
+    `;
+
+    if (docTitle.nextSibling) {
+      headerBar.insertBefore(brandLockup, docTitle.nextSibling);
+    } else {
+      headerBar.appendChild(brandLockup);
+    }
+  }
+  function showDocLoadingOverlay(titleText = "Loading Document", subText = "Please wait...") {
+    const hostEl = docViewport || document.getElementById("documentPane") || document.body;
+    if (!hostEl) return;
+
+    let overlay = document.getElementById("iqraDocLoadingOverlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "iqraDocLoadingOverlay";
+      overlay.innerHTML = `
+        <div class="iqra-doc-browser-card">
+          <div class="iqra-doc-browser-dots">
+            <span style="background:#f87171;"></span>
+            <span style="background:#fbbf24;"></span>
+            <span style="background:#34d399;"></span>
+            <span id="iqraDocLoadingUrlTag" style="width:auto; height:auto; border-radius:0; margin-left:6px; font-size:10.5px; color:#64748b; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              Iqra SmartClass Reader
+            </span>
+          </div>
+          <div class="iqra-doc-spinner"></div>
+          <div id="iqraDocLoadingTitle" style="font-size:14.5px; font-weight:700; color:#0f172a; margin-bottom:4px;"></div>
+          <div id="iqraDocLoadingSub" style="font-size:12.5px; font-weight:500; color:#475569;"></div>
+          <div class="iqra-doc-progress-track">
+            <div id="iqraDocLoadingBar" class="iqra-doc-progress-bar"></div>
+          </div>
+        </div>
+      `;
+      hostEl.appendChild(overlay);
+    }
+
+    const tEl = document.getElementById("iqraDocLoadingTitle");
+    const sEl = document.getElementById("iqraDocLoadingSub");
+    if (tEl) tEl.textContent = titleText;
+    if (sEl) sEl.textContent = subText;
+    overlay.style.display = "flex";
+  }
+
+  function updateDocLoadingStatus(subText, percent) {
+    const sEl = document.getElementById("iqraDocLoadingSub");
+    const barEl = document.getElementById("iqraDocLoadingBar");
+    if (sEl && subText) sEl.textContent = subText;
+    if (barEl && typeof percent === "number" && percent >= 0 && percent <= 100) {
+      barEl.style.animation = "none";
+      barEl.style.width = `${Math.max(8, Math.round(percent))}%`;
+    }
+  }
+
+  function hideDocLoadingOverlay() {
+    const overlay = document.getElementById("iqraDocLoadingOverlay");
+    if (overlay) overlay.remove();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", injectProgramBrandInDocHeader);
+  } else {
+    injectProgramBrandInDocHeader();
+  }
+
+  // ==========================================
+  // 0. GRACEFUL 60FPS HORIZONTAL DEPTH PAGE TURN ENGINE
   // ==========================================
   function captureCurrentRenderedPageSnapshot() {
     if (!renderTarget) return null;
@@ -138,7 +342,7 @@
     return copy;
   }
 
-function mountDepthSheet(sheetCanvas, zIndex = 99) {
+  function mountDepthSheet(sheetCanvas, zIndex = 99) {
     if (!renderTarget || !sheetCanvas) return null;
     const fx = document.createElement("canvas");
     fx.className = "iqra-curl-fx";
@@ -168,7 +372,7 @@ function mountDepthSheet(sheetCanvas, zIndex = 99) {
         ? "-14px 0 32px rgba(15, 23, 42, 0.30)"
         : "14px 0 32px rgba(15, 23, 42, 0.30)";
 
-    const duration = 550; // Smooth 0.55s
+    const duration = 550;
     const startTime = performance.now();
 
     const step = (now) => {
@@ -549,6 +753,7 @@ function mountDepthSheet(sheetCanvas, zIndex = 99) {
     renderedPageNum = null;
     currentPDF = null;
     window.currentPDF = null;
+    hideDocLoadingOverlay();
 
     if (renderTarget) renderTarget.innerHTML = "";
     if (docContainer) docContainer.classList.add("hidden");
@@ -567,7 +772,13 @@ function mountDepthSheet(sheetCanvas, zIndex = 99) {
     const isRemovingActive = indexToRemove === activeFileIndex;
 
     if (uploadedFiles[indexToRemove]) {
-      const removedName = uploadedFiles[indexToRemove].name;
+      const removedFile = uploadedFiles[indexToRemove];
+      const removedName = removedFile.name;
+      const cachedUrl = fileBlobUrlCache.get(removedFile);
+      if (cachedUrl) {
+        try { URL.revokeObjectURL(cachedUrl); } catch (e) {}
+        fileBlobUrlCache.delete(removedFile);
+      }
       filePageMemory.delete(removedName);
       for (const k of Array.from(pdfPageDrawingsMemory.keys())) {
         if (k.startsWith(removedName + "::")) {
@@ -672,6 +883,7 @@ function mountDepthSheet(sheetCanvas, zIndex = 99) {
   }
 
   function loadDocument(file) {
+    injectProgramBrandInDocHeader();
     const wbPaneEl = document.getElementById("whiteboardPane");
     const docPaneEl = document.getElementById("documentPane");
     const ext = file.name.split(".").pop().toLowerCase();
@@ -689,14 +901,14 @@ function mountDepthSheet(sheetCanvas, zIndex = 99) {
     syncSidebarVisibility();
     applyDocumentLayoutMode(targetMode);
 
-    setTimeout(() => applyDocumentLayoutMode(targetMode), 90);
-
     if (docTitle) docTitle.innerHTML = '<i class="fa-solid fa-file"></i> ' + file.name;
     if (dropZone) dropZone.classList.add("hidden");
     if (docContainer) docContainer.classList.remove("hidden");
     if (renderTarget) renderTarget.innerHTML = "";
     if (sheetTabsBar) sheetTabsBar.classList.add("hidden");
     resetControls();
+
+    showDocLoadingOverlay(`Opening ${file.name}`, "Preparing document viewer, please wait...");
 
     if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) renderImage(file);
     else if (ext === "pdf") renderPDF(file);
@@ -707,7 +919,7 @@ function mountDepthSheet(sheetCanvas, zIndex = 99) {
   }
 
   // ==========================================
-  // 2. LARGE CRISP FIT-TO-PANE PDF RENDERER + 60FPS PAPER CURL
+  // 2. FAST STREAMING PDF RENDERER + HORIZONTAL DEPTH SLIDE
   // ==========================================
   function updateZoomLabel() {
     if (zoomLevelText) {
@@ -759,8 +971,30 @@ function mountDepthSheet(sheetCanvas, zIndex = 99) {
 
   async function renderPDF(file) {
     try {
-      const buffer = await file.arrayBuffer();
-      currentPDF = await pdfjsLib.getDocument({ data: buffer }).promise;
+      showDocLoadingOverlay(`Loading ${file.name}`, "Initializing fast document stream, please wait...");
+
+      // Use Blob URL + rangeChunkSize so large PDFs open Page 1 immediately without copying entire file in RAM
+      let blobUrl = fileBlobUrlCache.get(file);
+      if (!blobUrl) {
+        blobUrl = URL.createObjectURL(file);
+        fileBlobUrlCache.set(file, blobUrl);
+      }
+
+      const loadingTask = pdfjsLib.getDocument({
+        url: blobUrl,
+        rangeChunkSize: 65536,
+        disableAutoFetch: false,
+        disableStream: false
+      });
+
+      loadingTask.onProgress = (progressData) => {
+        if (progressData && progressData.total > 0) {
+          const pct = Math.min(99, Math.round((progressData.loaded / progressData.total) * 100));
+          updateDocLoadingStatus(`Loading document (${pct}%) — Please wait...`, pct);
+        }
+      };
+
+      currentPDF = await loadingTask.promise;
       window.currentPDF = currentPDF;
       currentPdfKey = file.name || "document.pdf";
       renderedPageNum = null;
@@ -770,25 +1004,27 @@ function mountDepthSheet(sheetCanvas, zIndex = 99) {
       currentPageNum = savedPage && savedPage <= totalPages ? savedPage : 1;
       lastPageDirection = "none";
 
-      setTimeout(async () => {
-        if (!currentPDF) return;
-        currentZoom = await calculateAutoFitScale(currentPDF, currentPageNum);
-        updateZoomLabel();
-        renderPDFPage(currentPageNum);
-      }, 130);
+      updateDocLoadingStatus("Rendering page — Please wait...", 95);
+      currentZoom = await calculateAutoFitScale(currentPDF, currentPageNum);
+      updateZoomLabel();
+      await renderPDFPage(currentPageNum);
+      hideDocLoadingOverlay();
     } catch (err) {
+      hideDocLoadingOverlay();
       console.error("PDF load error:", err);
+      if (renderTarget) {
+        renderTarget.innerHTML = `<p style="color:#dc2626; padding:24px; font-weight:600;">Unable to open PDF: ${err.message}</p>`;
+      }
     }
   }
 
-async function renderPDFPage(pageNum) {
+  async function renderPDFPage(pageNum) {
     if (!currentPDF || !renderTarget) return;
 
     const turnDir = lastPageDirection;
     lastPageDirection = "none";
     const savedScrollLeft = docViewport ? docViewport.scrollLeft : 0;
 
-    // Capture outgoing page snapshot BEFORE clearing renderTarget for zero-flash Depth Slide
     const outgoingSnap =
       (turnDir === "next" || turnDir === "prev") && renderedPageNum !== null
         ? captureCurrentRenderedPageSnapshot()
@@ -803,7 +1039,6 @@ async function renderPDFPage(pageNum) {
       renderTarget.style.position = "relative";
     }
 
-    // Hold old page visually steady at z-index 98 while new page renders underneath
     const oldHoldFx = outgoingSnap ? mountDepthSheet(outgoingSnap, 98) : null;
 
     const page = await currentPDF.getPage(pageNum);
@@ -813,7 +1048,7 @@ async function renderPDFPage(pageNum) {
     const h = Math.max(1, Math.round(viewport.height));
 
     const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     canvas.width = w;
     canvas.height = h;
     canvas.style.display = "block";
@@ -829,13 +1064,13 @@ async function renderPDFPage(pageNum) {
     renderTarget.appendChild(canvas);
     await page.render({ canvasContext: ctx, viewport }).promise;
 
-    await renderPdfHyperlinks(page, viewport);
-
     renderedPageNum = pageNum;
     renderedZoom = currentZoom;
     restorePdfPageAnnotations(pageNum, w, h);
 
-    // Run Smooth (0.55s) Horizontal Depth Slide
+    // Non-blocking hyperlink overlay so page appears immediately
+    renderPdfHyperlinks(page, viewport);
+
     if ((turnDir === "next" || turnDir === "prev") && oldHoldFx) {
       const incomingSnap = captureCurrentRenderedPageSnapshot();
       if (incomingSnap) {
@@ -906,6 +1141,7 @@ async function renderPDFPage(pageNum) {
     try {
       const buffer = await file.arrayBuffer();
       mammoth.convertToHtml({ arrayBuffer: buffer }).then((result) => {
+        hideDocLoadingOverlay();
         const div = document.createElement("div");
         div.className = "word-content-box";
         div.innerHTML = result.value || "<p>Document is empty</p>";
@@ -914,6 +1150,7 @@ async function renderPDFPage(pageNum) {
         setTimeout(() => syncAnnotationLayer(div.clientWidth, div.clientHeight), 100);
       });
     } catch (err) {
+      hideDocLoadingOverlay();
       if (renderTarget) {
         renderTarget.innerHTML =
           '<p style="color:red; padding:20px;">DOCX read error: ' + err.message + "</p>";
@@ -922,21 +1159,26 @@ async function renderPDFPage(pageNum) {
   }
 
   async function renderExcelSheets(file) {
-    const buffer = await file.arrayBuffer();
-    currentExcelWorkbook = XLSX.read(buffer, { type: "array" });
-    if (sheetTabsBar) {
-      sheetTabsBar.innerHTML = "";
-      sheetTabsBar.classList.remove("hidden");
+    try {
+      const buffer = await file.arrayBuffer();
+      currentExcelWorkbook = XLSX.read(buffer, { type: "array" });
+      hideDocLoadingOverlay();
+      if (sheetTabsBar) {
+        sheetTabsBar.innerHTML = "";
+        sheetTabsBar.classList.remove("hidden");
 
-      currentExcelWorkbook.SheetNames.forEach((name, idx) => {
-        const tab = document.createElement("div");
-        tab.className = "sheet-tab " + (idx === 0 ? "active" : "");
-        tab.innerText = name;
-        tab.addEventListener("click", () => switchExcelSheet(name, tab));
-        sheetTabsBar.appendChild(tab);
-      });
+        currentExcelWorkbook.SheetNames.forEach((name, idx) => {
+          const tab = document.createElement("div");
+          tab.className = "sheet-tab " + (idx === 0 ? "active" : "");
+          tab.innerText = name;
+          tab.addEventListener("click", () => switchExcelSheet(name, tab));
+          sheetTabsBar.appendChild(tab);
+        });
+      }
+      switchExcelSheet(currentExcelWorkbook.SheetNames[0]);
+    } catch (err) {
+      hideDocLoadingOverlay();
     }
-    switchExcelSheet(currentExcelWorkbook.SheetNames[0]);
   }
 
   function switchExcelSheet(sheetName, clickedTab) {
@@ -972,6 +1214,7 @@ async function renderPDFPage(pageNum) {
       const slideFiles = Object.keys(zip.files).filter((path) =>
         path.match(/^ppt\/slides\/slide[0-9]+\.xml$/i)
       );
+      hideDocLoadingOverlay();
       if (slideFiles.length === 0) {
         if (renderTarget) {
           renderTarget.innerHTML =
@@ -1001,6 +1244,7 @@ async function renderPDFPage(pageNum) {
       if (btnNextPage) btnNextPage.disabled = false;
       showPPTXSlide(currentPageNum);
     } catch (err) {
+      hideDocLoadingOverlay();
       if (renderTarget) {
         renderTarget.innerHTML =
           '<p style="padding: 20px; color: red;">Save presentation as PDF for full animation view.</p>';
@@ -1038,6 +1282,7 @@ async function renderPDFPage(pageNum) {
   function renderImage(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
+      hideDocLoadingOverlay();
       const img = document.createElement("img");
       img.src = e.target.result;
       img.className = "rendered-image";
@@ -1050,6 +1295,7 @@ async function renderPDFPage(pageNum) {
 
   function renderText(file) {
     file.text().then((text) => {
+      hideDocLoadingOverlay();
       const pre = document.createElement("pre");
       pre.style.padding = "20px";
       pre.innerText = text;
@@ -1619,14 +1865,45 @@ async function renderPDFPage(pageNum) {
     }
   })();
 
+  // Fast Gallery/Remote Book Loader with Live Download Progress
   async function loadPdfFromUrl(url, title = "Book.pdf") {
+    const fileName = title.toLowerCase().endsWith(".pdf") ? title : title + ".pdf";
     try {
+      syncSidebarVisibility();
+      applyDocumentLayoutMode("doc-full");
+      if (docTitle) docTitle.innerHTML = '<i class="fa-solid fa-file"></i> ' + fileName;
+      if (dropZone) dropZone.classList.add("hidden");
+      if (docContainer) docContainer.classList.remove("hidden");
+      showDocLoadingOverlay(`Downloading ${fileName}`, "Connecting to library, please wait...");
+
       const res = await fetch(url);
-      const blob = await res.blob();
-      const fileName = title.toLowerCase().endsWith(".pdf") ? title : title + ".pdf";
-      const file = new File([blob], fileName, { type: "application/pdf" });
-      addFilesToPlaylist([file]);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const contentLength = Number(res.headers.get("content-length") || 0);
+      if (res.body && contentLength > 0) {
+        const reader = res.body.getReader();
+        const chunks = [];
+        let received = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+          const pct = Math.min(99, Math.round((received / contentLength) * 100));
+          updateDocLoadingStatus(`Downloading document (${pct}%) — Please wait...`, pct);
+        }
+
+        const blob = new Blob(chunks, { type: "application/pdf" });
+        const file = new File([blob], fileName, { type: "application/pdf" });
+        addFilesToPlaylist([file]);
+      } else {
+        const blob = await res.blob();
+        const file = new File([blob], fileName, { type: "application/pdf" });
+        addFilesToPlaylist([file]);
+      }
     } catch (err) {
+      hideDocLoadingOverlay();
       console.error("Book PDF load error:", err);
     }
   }
