@@ -1,7 +1,7 @@
 /* ==========================================================================
    IQRA ISLAMIC ACADEMY - HOST STUDIO & LIVE BROADCAST CONTROLLER
-   (Native Screen + System/Tab Audio Share, Dual Stream Round Host Camera,
-    Active-Speaker Round Student Bubble with Minimize, Wake Lock, Red/Green UI)
+   (Native Entire-Screen + System Audio Share on PC & Mobile/Tablet,
+    Movable/Minimizable Round Student Bubble on Host Stage, Zero-Lag Stream)
    ========================================================================== */
 (function () {
   const ACADEMY_NAME = "Iqra Islamic Academy";
@@ -55,7 +55,7 @@
     { id: "bw", label: "Black & White Classic", css: "grayscale(1) contrast(1.18)" }
   ];
 
-  // Prevent Device Sleep / Screen Off while Live Class is active
+  // Keep device screen awake while Live Class is active
   async function enableHostWakeLock() {
     try {
       if ("wakeLock" in navigator) {
@@ -123,7 +123,7 @@
     return palette[Math.abs(hash) % palette.length];
   }
 
-  // Mix Microphone Audio + Shared Video/Tab System Audio cleanly into a single natural audio track
+  // Mix Microphone + System/Tab Video Audio into one clean natural stream
   function rebuildMixedAudioStream() {
     if (audioMixCtx) {
       try { audioMixCtx.close(); } catch (e) {}
@@ -213,7 +213,6 @@
     return Boolean((localScreenStream && localScreenStream.active) || (canvasFallbackStream && canvasFallbackStream.active));
   }
 
-  // Primary Stream sent to Students (Shared Screen + Mixed Audio OR Host Camera + Mixed Audio)
   function getActiveBroadcastStream() {
     const combined = new MediaStream();
 
@@ -237,6 +236,7 @@
     return combined.getTracks().length > 0 ? combined : null;
   }
 
+  // Low-Lag Mobile/Tablet Fallback Stream (800px cap, 8 FPS so mobile CPU never lags)
   function createLowLagBoardCanvasStream() {
     if (canvasBroadcastTimer) clearInterval(canvasBroadcastTimer);
 
@@ -246,7 +246,7 @@
     const renderBoardFrame = () => {
       const vw = window.innerWidth || 1280;
       const vh = window.innerHeight || 720;
-      const maxW = 960;
+      const maxW = 800;
       const scale = vw > maxW ? maxW / vw : 1;
       const targetW = Math.round(vw * scale);
       const targetH = Math.round(vh * scale);
@@ -273,10 +273,9 @@
     };
 
     renderBoardFrame();
-    canvasBroadcastTimer = setInterval(renderBoardFrame, 100);
-    return composite.captureStream(10);
+    canvasBroadcastTimer = setInterval(renderBoardFrame, 125); // Smooth 8 FPS with zero lag
+    return composite.captureStream(8);
   }
-
   function stopBoardSharingStreams() {
     if (canvasBroadcastTimer) {
       clearInterval(canvasBroadcastTimer);
@@ -392,11 +391,28 @@
     broadcastToAllStudents({ type: "roster-update", roster });
   }
 
-  // Broadcast Main Stream + Secondary Round Host Camera Stream during Screen Share
+  function applyMobileBitrateCap(call, maxBps) {
+    try {
+      const pc = call && call.peerConnection;
+      if (!pc) return;
+      setTimeout(() => {
+        pc.getSenders().forEach((sender) => {
+          if (sender.track && sender.track.kind === "video") {
+            const p = sender.getParameters();
+            if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+            p.encodings[0].maxBitrate = maxBps;
+            sender.setParameters(p).catch(() => {});
+          }
+        });
+      }, 600);
+    } catch (e) {}
+  }
+
   function broadcastStreamToAllStudents() {
     const stream = getActiveBroadcastStream();
     const sharing = isScreenSharingActive();
     const hasActiveVideo = Boolean(stream && stream.getVideoTracks().length > 0);
+    const isMobileHost = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     broadcastToAllStudents({
       type: "host-stage-state",
@@ -413,10 +429,10 @@
           student.mediaCall = classPeer.call(studentPeerId, stream, {
             metadata: { streamRole: sharing ? "screen-share" : "host-cam" }
           });
+          if (isMobileHost) applyMobileBitrateCap(student.mediaCall, 1200000);
         }
       } catch (e) {}
 
-      // Send Host's Camera separately for the movable Round Bubble on Student screen during Screen Share
       try {
         if (student.roundCamCall) {
           student.roundCamCall.close();
@@ -426,12 +442,13 @@
           student.roundCamCall = classPeer.call(studentPeerId, processedVideoStream, {
             metadata: { streamRole: "host-round-cam" }
           });
+          if (isMobileHost) applyMobileBitrateCap(student.roundCamCall, 350000);
         }
       } catch (e) {}
     });
   }
 
-  // Update Host's Movable & Minimizable Round Student Bubble during Screen Share
+  // Host's Round Student Bubble (Always visible when a student is connected, movable & minimizable)
   function updateHostRoundStudentBubble() {
     const bubble = document.getElementById("iqraHostRoundStudentBubble");
     const vid = document.getElementById("iqraHostRoundStudentVid");
@@ -439,12 +456,11 @@
     const labelEl = document.getElementById("iqraHostRoundStudentName");
     if (!bubble) return;
 
-    if (!isScreenSharingActive() || connectedStudents.size === 0) {
+    if (connectedStudents.size === 0) {
       bubble.style.display = "none";
       return;
     }
 
-    // Pick active speaking student, or pinned student, or first student
     let targetStudent = null;
     if (activeSpeakingStudentId && connectedStudents.has(activeSpeakingStudentId)) {
       targetStudent = connectedStudents.get(activeSpeakingStudentId);
@@ -460,7 +476,11 @@
     }
 
     bubble.style.display = "flex";
-    const hasVid = targetStudent.camOn && targetStudent.incomingStream && targetStudent.incomingStream.getVideoTracks().length > 0;
+    const hasLiveTrack = Boolean(
+      targetStudent.incomingStream &&
+      targetStudent.incomingStream.getVideoTracks().some((t) => t.readyState === "live" && t.enabled)
+    );
+    const showVideo = Boolean(targetStudent.camOn && hasLiveTrack);
 
     if (isHostRoundBubbleMinimized) {
       bubble.style.width = "40px";
@@ -469,6 +489,7 @@
       if (initialsEl) {
         initialsEl.style.display = "flex";
         initialsEl.style.fontSize = "12px";
+        initialsEl.style.background = getAvatarColor(targetStudent.name);
         initialsEl.textContent = getInitials(targetStudent.name);
       }
       if (labelEl) labelEl.style.display = "none";
@@ -479,9 +500,11 @@
         labelEl.style.display = "block";
         labelEl.textContent = targetStudent.name;
       }
-      if (hasVid && vid) {
+      if (showVideo && vid) {
+        if (vid.srcObject !== targetStudent.incomingStream) {
+          vid.srcObject = targetStudent.incomingStream;
+        }
         vid.style.display = "block";
-        vid.srcObject = targetStudent.incomingStream;
         vid.play().catch(() => {});
         if (initialsEl) initialsEl.style.display = "none";
       } else {
@@ -489,6 +512,7 @@
         if (initialsEl) {
           initialsEl.style.display = "flex";
           initialsEl.style.fontSize = "22px";
+          initialsEl.style.background = getAvatarColor(targetStudent.name);
           initialsEl.textContent = getInitials(targetStudent.name);
         }
       }
@@ -517,7 +541,6 @@
 
     updateHostRoundStudentBubble();
 
-    // During screen share, show screen share status on stage + round student bubble in corner
     if (isScreenSharingActive()) {
       if (localScreenStream && localScreenStream.active) {
         preview.srcObject = localScreenStream;
@@ -581,7 +604,6 @@
       <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Click <b>Share Screen</b> below to broadcast your screen</div>
     `;
   }
-
   function renderHostParticipantsList() {
     const listEl = document.getElementById("iqraHostParticipantsList");
     if (!listEl) return;
@@ -822,7 +844,6 @@
     syncRosterToAllStudents();
   }
 
-  // Settings Modal (Microphone, Camera, Video Filter & Profile Photo — No Voice Changer)
   async function openHostDeviceSettingsModal() {
     const existing = document.getElementById("iqraLiveSettingsModal");
     if (existing) existing.remove();
@@ -1337,7 +1358,7 @@
             <video id="iqraTeacherPreviewVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: contain; display: none; background: #000;"></video>
             <div id="iqraTeacherPlaceholder" style="display: flex; flex-direction: column; align-items: center; text-align: center; color: #94a3b8; padding: 16px;"></div>
 
-            <!-- Movable & Minimizable Round Student Bubble (Shown during Screen Share) -->
+            <!-- Movable & Minimizable Round Student Bubble -->
             <div id="iqraHostRoundStudentBubble" style="
               display: none; position: absolute; bottom: 12px; right: 12px;
               width: 108px; height: 108px; border-radius: 50%;
@@ -1388,7 +1409,7 @@
         </div>
       </div>
 
-      <!-- Bottom Controls Bar (Red when Off, Green when On) -->
+      <!-- Bottom Controls Bar -->
       <div style="background: #1e293b; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 7px; border-top: 1px solid #334155;">
         <button id="btnToggleMic" type="button" style="background: #dc2626; color: #ffffff; border: none; border-radius: 8px; padding: 5px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
           <i class="fa-solid fa-microphone-slash"></i> Mic Off
@@ -1682,7 +1703,7 @@
       syncRosterToAllStudents();
     };
 
-    // Share Screen with System/Tab Audio Support on Both PC & Tablet/Mobile
+    // Share Screen: Triggers Android/Tablet & PC Native Screen/App/Tab Picker
     const shareBtn = document.getElementById("btnShareBoardScreen");
     shareBtn.onclick = async () => {
       if (isScreenSharingActive()) {
@@ -1696,11 +1717,25 @@
       }
 
       if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === "function") {
+        let captured = false;
         try {
           localScreenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: { ideal: 24, max: 30 } },
-            audio: true // Enables sharing video/tab audio along with screen
+            video: true,
+            audio: true
           });
+          captured = true;
+        } catch (err1) {
+          if (err1 && err1.name === "NotAllowedError") return;
+          // Retry with video-only if Android browser rejects audio:true in getDisplayMedia
+          try {
+            localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            captured = true;
+          } catch (err2) {
+            if (err2 && err2.name === "NotAllowedError") return;
+          }
+        }
+
+        if (captured && localScreenStream) {
           const track = localScreenStream.getVideoTracks()[0];
           if (track) {
             track.onended = () => {
@@ -1716,14 +1751,12 @@
           shareBtn.style.background = "#16a34a";
           refreshHostStagePreview();
           broadcastStreamToAllStudents();
-          showLiveToast("Screen & audio sharing started.");
+          showLiveToast("Entire screen sharing active.");
           return;
-        } catch (err) {
-          if (err && err.name === "NotAllowedError") return;
         }
       }
 
-      // Automatic fallback only for browsers without native screen capture
+      // Low-Lag Fallback only if device browser does not support getDisplayMedia at all
       canvasFallbackStream = createLowLagBoardCanvasStream();
       shareBtn.innerHTML = `<i class="fa-solid fa-stop"></i> Stop Share`;
       shareBtn.style.background = "#16a34a";
