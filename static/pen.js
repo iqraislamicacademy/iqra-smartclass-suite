@@ -2,9 +2,9 @@
 // PEN SUITE & MULTI-SURFACE DRAWING ENGINE (pen.js)
 // Works on Whiteboard + Uploaded Images + PDF Viewer
 // Features:
-// 1. Live Real-Time Tremor Stabilizer (EMA + Quadratic Bezier)
-// 2. Zero Tail/Diagonal Line on Pen Lift (onMouseUp never reads synthetic 0,0 coords)
-// 3. Zero Y-Offset Jump on Whiteboard + Highlighter Protected from Finger Eraser
+// 1. Live Real-Time Tremor Stabilizer (EMA + Quadratic Bezier) for Smooth Pens
+// 2. 3 Zero-Lag Fast Pens (Fast Normal, Fast English, Fast Urdu) for Android & Digital Boards
+// 3. Zero Tail/Diagonal Line on Pen Lift + Highlighter Protected from Finger Eraser
 // ==========================================
 
 // 1. DOCK COLOR FLYOUT & PRESET SWATCHES
@@ -83,10 +83,34 @@ if (typeof brushColor !== "undefined" && brushColor) {
   const customColorInput = document.getElementById("penSuiteCustomColorInput");
   const colorIndicator = document.getElementById("penSuiteColorIndicator");
   const previewLine = document.getElementById("penSuiteLivePreview");
-  const typeButtons = document.querySelectorAll(".pen-type-btn");
   const colorDots = document.querySelectorAll(".pen-color-dot");
 
   if (!penWrapper || !mainBtn || !flyout) return;
+
+  // Inject 3 Zero-Lag Fast Pens into the existing Pen Style grid without altering existing 5 buttons
+  (function injectFastPenButtons() {
+    const firstPenBtn = flyout.querySelector(".pen-type-btn");
+    if (!firstPenBtn || !firstPenBtn.parentElement) return;
+    const gridContainer = firstPenBtn.parentElement;
+
+    const fastPens = [
+      { type: "fast-normal", icon: "fa-bolt", label: "Fast Normal" },
+      { type: "fast-en", icon: "fa-pen-nib", label: "Fast English" },
+      { type: "fast-ur", icon: "fa-feather-pointed", label: "Fast Urdu" },
+    ];
+
+    fastPens.forEach((fp) => {
+      if (gridContainer.querySelector(`[data-pen-type="${fp.type}"]`)) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = firstPenBtn.className.replace(/\bactive\b/g, "").trim();
+      btn.setAttribute("data-pen-type", fp.type);
+      btn.innerHTML = `<i class="fa-solid ${fp.icon}"></i> ${fp.label}`;
+      gridContainer.appendChild(btn);
+    });
+  })();
+
+  const typeButtons = flyout.querySelectorAll(".pen-type-btn");
 
   const PenState = {
     type: "normal",
@@ -94,6 +118,10 @@ if (typeof brushColor !== "undefined" && brushColor) {
     size: 4,
     isActive: false,
   };
+
+  function isFastPenType(t) {
+    return t === "fast-normal" || t === "fast-en" || t === "fast-ur";
+  }
 
   const activeTouchPointers = new Set();
   window.addEventListener(
@@ -209,7 +237,6 @@ if (typeof brushColor !== "undefined" && brushColor) {
     }
 
     finish() {
-      // Never append synthetic mouseup/pointerup coordinates; finalize purely from recorded points
       return this.getUltraSmoothPoints();
     }
 
@@ -314,8 +341,154 @@ if (typeof brushColor !== "undefined" && brushColor) {
   }
 
   // ========================================================
-  // WHITEBOARD BRUSHES
+  // WHITEBOARD BRUSHES (5 STABILIZED + 3 ZERO-LAG FAST PENS)
   // ========================================================
+  function createFastNormalBrush(canvas) {
+    const brush = new fabric.BaseBrush();
+    brush.canvas = canvas;
+    brush.points = [];
+
+    brush.onMouseDown = function (pointer, options) {
+      const p = getExactBoardPointer(this.canvas, options ? options.e : pointer);
+      this.points = [{ x: p.x, y: p.y }];
+      this.canvas.clearContext(this.canvas.contextTop);
+    };
+
+    brush.onMouseMove = function (pointer, options) {
+      if (this.points.length === 0) return;
+      const p = getExactBoardPointer(this.canvas, options ? options.e : pointer);
+      const prev = this.points[this.points.length - 1];
+      if (Math.hypot(p.x - prev.x, p.y - prev.y) < 0.7) return;
+
+      this.points.push({ x: p.x, y: p.y });
+
+      const ctx = this.canvas.contextTop;
+      const vpt = this.canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+      ctx.save();
+      ctx.transform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5]);
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = this.width;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    brush.onMouseUp = function () {
+      this.canvas.clearContext(this.canvas.contextTop);
+      if (this.points.length < 2) {
+        this.points = [];
+        return;
+      }
+
+      const d = buildSvgQuadraticPath(this.points);
+      const pathObj = new fabric.Path(d, {
+        fill: null,
+        stroke: this.color,
+        strokeWidth: this.width,
+        strokeLineCap: "round",
+        strokeLineJoin: "round",
+        selectable: false,
+        evented: false,
+        objectCaching: false,
+      });
+
+      this.canvas.add(pathObj);
+      this.canvas.renderAll();
+      this.points = [];
+    };
+
+    return brush;
+  }
+
+  function createFastRibbonBrush(canvas, angleDeg) {
+    const brush = new fabric.BaseBrush();
+    brush.canvas = canvas;
+    brush.points = [];
+    brush.angleRad = (angleDeg * Math.PI) / 180;
+
+    brush.onMouseDown = function (pointer, options) {
+      const p = getExactBoardPointer(this.canvas, options ? options.e : pointer);
+      this.points = [{ x: p.x, y: p.y }];
+      this.canvas.clearContext(this.canvas.contextTop);
+    };
+
+    brush.onMouseMove = function (pointer, options) {
+      if (this.points.length === 0) return;
+      const p = getExactBoardPointer(this.canvas, options ? options.e : pointer);
+      const p1 = this.points[this.points.length - 1];
+      if (Math.hypot(p.x - p1.x, p.y - p1.y) < 0.7) return;
+
+      const p2 = { x: p.x, y: p.y };
+      this.points.push(p2);
+
+      const halfW = this.width / 2;
+      const dx = Math.cos(this.angleRad) * halfW;
+      const dy = Math.sin(this.angleRad) * halfW;
+
+      const ctx = this.canvas.contextTop;
+      const vpt = this.canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+      ctx.save();
+      ctx.transform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5]);
+      ctx.fillStyle = this.color;
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(p1.x - dx, p1.y - dy);
+      ctx.lineTo(p1.x + dx, p1.y + dy);
+      ctx.lineTo(p2.x + dx, p2.y + dy);
+      ctx.lineTo(p2.x - dx, p2.y - dy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    brush.onMouseUp = function () {
+      this.canvas.clearContext(this.canvas.contextTop);
+      const pts = this.points;
+      if (!pts || pts.length < 2) {
+        this.points = [];
+        return;
+      }
+
+      const halfW = this.width / 2;
+      const dx = Math.cos(this.angleRad) * halfW;
+      const dy = Math.sin(this.angleRad) * halfW;
+
+      let d = "";
+      for (let i = 1; i < pts.length; i++) {
+        const p1 = pts[i - 1];
+        const p2 = pts[i];
+        d +=
+          `M ${p1.x - dx} ${p1.y - dy} ` +
+          `L ${p1.x + dx} ${p1.y + dy} ` +
+          `L ${p2.x + dx} ${p2.y + dy} ` +
+          `L ${p2.x - dx} ${p2.y - dy} Z `;
+      }
+
+      const pathObj = new fabric.Path(d, {
+        fill: this.color,
+        stroke: this.color,
+        strokeWidth: 0.5,
+        strokeLineJoin: "round",
+        strokeLineCap: "round",
+        selectable: false,
+        evented: false,
+        objectCaching: false,
+      });
+
+      this.canvas.add(pathObj);
+      this.canvas.renderAll();
+      this.points = [];
+    };
+
+    return brush;
+  }
+
   function createSmoothPenBrush(canvas, widthMultiplier = 1.0) {
     const brush = new fabric.BaseBrush();
     brush.canvas = canvas;
@@ -565,11 +738,11 @@ if (typeof brushColor !== "undefined" && brushColor) {
     return hlCanvas;
   }
 
-// ========================================================
+  // ========================================================
   // SURFACE UNDO / REDO HISTORY MANAGER (PDF & UPLOADED IMAGES)
   // ========================================================
   const SurfaceHistory = {
-    stacks: new WeakMap(), // penCanvas -> { undo: [], redo: [] }
+    stacks: new WeakMap(),
     lastInteractedPenCanvas: null,
 
     getStack(penCanvas) {
@@ -624,14 +797,12 @@ if (typeof brushColor !== "undefined" && brushColor) {
     },
 
     getActiveSurfaceCanvas() {
-      // 1. If PDF viewer is visible, prioritize PDF surface canvas
       const docPane = document.getElementById("documentPane");
       const renderTarget = document.getElementById("renderTarget");
       if (docPane && window.getComputedStyle(docPane).display !== "none" && renderTarget) {
         const pdfSurface = renderTarget.querySelector(".pen-surface-canvas");
         if (pdfSurface) return pdfSurface;
       }
-      // 2. Otherwise check last interacted image overlay canvas if still in DOM
       if (this.lastInteractedPenCanvas && document.body.contains(this.lastInteractedPenCanvas)) {
         return this.lastInteractedPenCanvas;
       }
@@ -669,7 +840,6 @@ if (typeof brushColor !== "undefined" && brushColor) {
 
   window.IqraSurfaceHistory = SurfaceHistory;
 
-  // Hook Dock Undo / Redo Buttons (#btnUndo, #btnRedo) & Ctrl+Z / Ctrl+Y for PDF & Images
   window.addEventListener(
     "click",
     (e) => {
@@ -730,6 +900,7 @@ if (typeof brushColor !== "undefined" && brushColor) {
     const stabilizer = new LiveStrokeStabilizer(0.3, 0.38, 1.5);
     let baseSnapshot = null;
     let targetDrawCanvas = canvas;
+    let lastFastPt = null;
 
     function restoreBaseSnapshot(ctx, cnv) {
       if (baseSnapshot) {
@@ -749,10 +920,13 @@ if (typeof brushColor !== "undefined" && brushColor) {
 
       if (e.pointerType === "touch" && activeTouchPointers.size >= 2) {
         if (drawing) {
-          restoreBaseSnapshot(targetDrawCanvas.getContext("2d"), targetDrawCanvas);
+          if (!isFastPenType(PenState.type)) {
+            restoreBaseSnapshot(targetDrawCanvas.getContext("2d"), targetDrawCanvas);
+          }
           drawing = false;
           activePointerId = null;
           baseSnapshot = null;
+          lastFastPt = null;
         }
         return;
       }
@@ -780,7 +954,6 @@ if (typeof brushColor !== "undefined" && brushColor) {
         canvas.getContext("2d").drawImage(temp, 0, 0, canvas.width, canvas.height);
       }
 
-      // Ensure highlighter layer exists and record Undo snapshot before stroke starts
       if (PenState.type === "highlighter") {
         targetDrawCanvas = getOrCreateHighlighterLayer(canvas);
       } else {
@@ -788,26 +961,37 @@ if (typeof brushColor !== "undefined" && brushColor) {
       }
       SurfaceHistory.pushBeforeStroke(canvas);
 
-      const ctx = targetDrawCanvas.getContext("2d");
-      try {
-        baseSnapshot = ctx.getImageData(0, 0, targetDrawCanvas.width, targetDrawCanvas.height);
-      } catch (err) {
+      const startPt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+      if (isFastPenType(PenState.type)) {
+        // Zero-lag direct incremental mode (skips heavy full-canvas getImageData restore on every move)
         baseSnapshot = null;
+        lastFastPt = startPt;
+      } else {
+        const ctx = targetDrawCanvas.getContext("2d");
+        try {
+          baseSnapshot = ctx.getImageData(0, 0, targetDrawCanvas.width, targetDrawCanvas.height);
+        } catch (err) {
+          baseSnapshot = null;
+        }
+        stabilizer.reset(startPt);
       }
 
       drawing = true;
       activePointerId = e.pointerId;
-      stabilizer.reset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
     });
 
     canvas.addEventListener("pointermove", (e) => {
       if (!drawing || !PenState.isActive || e.pointerId !== activePointerId) return;
 
       if (e.pointerType === "touch" && activeTouchPointers.size >= 2) {
-        restoreBaseSnapshot(targetDrawCanvas.getContext("2d"), targetDrawCanvas);
+        if (!isFastPenType(PenState.type)) {
+          restoreBaseSnapshot(targetDrawCanvas.getContext("2d"), targetDrawCanvas);
+        }
         drawing = false;
         activePointerId = null;
         baseSnapshot = null;
+        lastFastPt = null;
         return;
       }
 
@@ -816,11 +1000,50 @@ if (typeof brushColor !== "undefined" && brushColor) {
 
       const rect = canvas.getBoundingClientRect();
       const rawPt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      const added = stabilizer.push(rawPt);
-      if (!added && PenState.type !== "highlighter") return;
-
       const ctx = targetDrawCanvas.getContext("2d");
       const exactSize = PenState.size;
+
+      // FAST PENS: Direct Incremental Drawing (Zero-Lag on Android & Digital Boards)
+      if (isFastPenType(PenState.type) && lastFastPt) {
+        if (Math.hypot(rawPt.x - lastFastPt.x, rawPt.y - lastFastPt.y) < 0.6) return;
+        ctx.save();
+        if (PenState.type === "fast-en" || PenState.type === "fast-ur") {
+          const angleDeg = PenState.type === "fast-en" ? 45 : -25;
+          const angleRad = (angleDeg * Math.PI) / 180;
+          const width = PenState.type === "fast-en" ? exactSize * 1.8 : exactSize * 2.2;
+          const halfW = width / 2;
+          const dx = Math.cos(angleRad) * halfW;
+          const dy = Math.sin(angleRad) * halfW;
+
+          ctx.fillStyle = PenState.color;
+          ctx.strokeStyle = PenState.color;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(lastFastPt.x - dx, lastFastPt.y - dy);
+          ctx.lineTo(lastFastPt.x + dx, lastFastPt.y + dy);
+          ctx.lineTo(rawPt.x + dx, rawPt.y + dy);
+          ctx.lineTo(rawPt.x - dx, rawPt.y - dy);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = PenState.color;
+          ctx.lineWidth = exactSize;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          ctx.moveTo(lastFastPt.x, lastFastPt.y);
+          ctx.lineTo(rawPt.x, rawPt.y);
+          ctx.stroke();
+        }
+        ctx.restore();
+        lastFastPt = rawPt;
+        return;
+      }
+
+      // STABILIZED PENS
+      const added = stabilizer.push(rawPt);
+      if (!added && PenState.type !== "highlighter") return;
 
       restoreBaseSnapshot(ctx, targetDrawCanvas);
       ctx.save();
@@ -884,6 +1107,7 @@ if (typeof brushColor !== "undefined" && brushColor) {
       activePointerId = null;
       stabilizer.points = [];
       baseSnapshot = null;
+      lastFastPt = null;
       if (typeof window.saveCurrentPdfPageAnnotations === "function") {
         setTimeout(window.saveCurrentPdfPageAnnotations, 15);
       }
@@ -923,7 +1147,7 @@ if (typeof brushColor !== "undefined" && brushColor) {
       }
     });
 
-const renderTarget = document.getElementById("renderTarget");
+    const renderTarget = document.getElementById("renderTarget");
     if (renderTarget) {
       if (window.getComputedStyle(renderTarget).position === "static") {
         renderTarget.style.position = "relative";
@@ -1024,6 +1248,19 @@ const renderTarget = document.getElementById("renderTarget");
         hlBrush.color = hexToRgba(PenState.color, 0.22);
         hlBrush.width = Math.max(8, exactSize * 2.1);
         fabricCanvas.freeDrawingBrush = hlBrush;
+      } else if (PenState.type === "fast-normal") {
+        const fastNormal = createFastNormalBrush(fabricCanvas);
+        fastNormal.color = PenState.color;
+        fastNormal.width = exactSize;
+        fabricCanvas.freeDrawingBrush = fastNormal;
+      } else if (PenState.type === "fast-en") {
+        fabricCanvas.freeDrawingBrush = createFastRibbonBrush(fabricCanvas, 45);
+        fabricCanvas.freeDrawingBrush.color = PenState.color;
+        fabricCanvas.freeDrawingBrush.width = exactSize * 1.8;
+      } else if (PenState.type === "fast-ur") {
+        fabricCanvas.freeDrawingBrush = createFastRibbonBrush(fabricCanvas, -25);
+        fabricCanvas.freeDrawingBrush.color = PenState.color;
+        fabricCanvas.freeDrawingBrush.width = exactSize * 2.2;
       }
     }
 
@@ -1107,7 +1344,7 @@ const renderTarget = document.getElementById("renderTarget");
         fabricCanvas.freeDrawingBrush.width =
           PenState.type === "highlighter"
             ? Math.max(8, val * 2.1)
-            : PenState.type.startsWith("calligraphy")
+            : PenState.type.startsWith("calligraphy") || PenState.type === "fast-en" || PenState.type === "fast-ur"
             ? val * 1.8
             : val;
       }

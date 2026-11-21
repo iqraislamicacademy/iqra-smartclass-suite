@@ -1,7 +1,7 @@
 /* ==========================================================================
    IQRA ISLAMIC ACADEMY - HOST STUDIO & LIVE BROADCAST CONTROLLER
-   (Secure class.html Links, Student-Front Stage Switching, Low-Lag Mobile
-    Board Broadcast, 12 Age/Gender Voice Filters, Separate Audio/Video Locks)
+   (Native Screen + System/Tab Audio Share, Dual Stream Round Host Camera,
+    Active-Speaker Round Student Bubble with Minimize, Wake Lock, Red/Green UI)
    ========================================================================== */
 (function () {
   const ACADEMY_NAME = "Iqra Islamic Academy";
@@ -16,31 +16,32 @@
   let rawMicStream = null;
   let rawCamStream = null;
   let processedVideoStream = null;
-  let processedAudioStream = null;
+  let mixedAudioStream = null;
 
   let localScreenStream = null;
   let canvasFallbackStream = null;
   let canvasBroadcastTimer = null;
   let videoFilterLoopId = null;
 
-  let audioCtx = null;
-  let audioDestNode = null;
+  let audioMixCtx = null;
+  let wakeLockSentinel = null;
 
   let selectedMicId = "";
   let selectedCamId = "";
   let selectedVideoFilter = "none";
-  let selectedVoicePreset = "natural";
-  let hostStageTargetId = "auto"; // "auto" (shows student when joined) | "host" | student peerId
+  let hostStageTargetId = "auto";
+  let activeSpeakingStudentId = null;
 
   let isMicMuted = false;
   let isCamOff = false;
   let isWallMinimized = false;
   let isFullSizePanel = false;
+  let isHostRoundBubbleMinimized = false;
   let activeHostTab = "participants";
   let isHostSidePanelOpen = true;
   let unreadMessages = 0;
 
-  // peerId -> { conn, mediaCall, incomingStream, name, micOn, camOn, micLocked, camLocked }
+  // peerId -> { conn, mediaCall, roundCamCall, incomingStream, name, micOn, camOn, micLocked, camLocked }
   const connectedStudents = new Map();
   const chatHistory = [];
 
@@ -54,22 +55,27 @@
     { id: "bw", label: "Black & White Classic", css: "grayscale(1) contrast(1.18)" }
   ];
 
-  // Exact 12 Age & Gender Voice Filters + Natural Default
-  const VOICE_PRESETS = [
-    { id: "natural", label: "0. Natural Voice (Original)" },
-    { id: "baby-6", label: "1. 6 Year Baby" },
-    { id: "boy-10", label: "2. 10 Year Boy" },
-    { id: "boy-15", label: "3. 15 Year Boy" },
-    { id: "boy-22", label: "4. 22 Year Boy" },
-    { id: "man-50", label: "5. 50 Year Old Man" },
-    { id: "man-60", label: "6. 60 Year Old Man" },
-    { id: "fbaby-6", label: "7. 6 Year Female Baby" },
-    { id: "girl-10", label: "8. 10 Year Girl" },
-    { id: "girl-15", label: "9. 15 Year Girl" },
-    { id: "girl-22", label: "10. 22 Year Girl" },
-    { id: "woman-50", label: "11. 50 Year Old Woman" },
-    { id: "woman-60", label: "12. 60 Year Old Woman" }
-  ];
+  // Prevent Device Sleep / Screen Off while Live Class is active
+  async function enableHostWakeLock() {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLockSentinel = await navigator.wakeLock.request("screen");
+      }
+    } catch (e) {}
+  }
+
+  function releaseHostWakeLock() {
+    if (wakeLockSentinel) {
+      try { wakeLockSentinel.release(); } catch (e) {}
+      wakeLockSentinel = null;
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && isHostingActive) {
+      enableHostWakeLock();
+    }
+  });
 
   function getStudentClassUrl(slug) {
     const loc = window.location;
@@ -117,113 +123,47 @@
     return palette[Math.abs(hash) % palette.length];
   }
 
-  // Real-time Web Audio Pitch & Formant Processor for the 12 Age & Gender Voices
-  function buildProcessedAudioTrack(inputMicStream, presetId) {
-    if (!inputMicStream || !inputMicStream.getAudioTracks().length) return null;
-
-    if (audioCtx) {
-      try { audioCtx.close(); } catch (e) {}
-      audioCtx = null;
+  // Mix Microphone Audio + Shared Video/Tab System Audio cleanly into a single natural audio track
+  function rebuildMixedAudioStream() {
+    if (audioMixCtx) {
+      try { audioMixCtx.close(); } catch (e) {}
+      audioMixCtx = null;
     }
 
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return inputMicStream.getAudioTracks()[0];
+    const hasMic = rawMicStream && rawMicStream.getAudioTracks().length > 0;
+    const hasSysAudio = localScreenStream && localScreenStream.getAudioTracks().length > 0;
 
-    audioCtx = new AudioContextClass();
-    const source = audioCtx.createMediaStreamSource(inputMicStream);
-    audioDestNode = audioCtx.createMediaStreamDestination();
-
-    const highpass = audioCtx.createBiquadFilter();
-    highpass.type = "highpass";
-    highpass.frequency.value = 60;
-
-    const formant1 = audioCtx.createBiquadFilter();
-    formant1.type = "peaking";
-    formant1.frequency.value = 1000;
-    formant1.Q.value = 1.4;
-    formant1.gain.value = 0;
-
-    const formant2 = audioCtx.createBiquadFilter();
-    formant2.type = "peaking";
-    formant2.frequency.value = 2600;
-    formant2.Q.value = 1.5;
-    formant2.gain.value = 0;
-
-    const lowShelf = audioCtx.createBiquadFilter();
-    lowShelf.type = "lowshelf";
-    lowShelf.frequency.value = 240;
-    lowShelf.gain.value = 0;
-
-    const highShelf = audioCtx.createBiquadFilter();
-    highShelf.type = "highshelf";
-    highShelf.frequency.value = 3800;
-    highShelf.gain.value = 0;
-
-    const presets = {
-      "natural": { pitch: 1.0, hp: 60, low: 0, f1Freq: 1000, f1Gain: 0, f2Freq: 2600, f2Gain: 0, high: 0 },
-      "baby-6": { pitch: 1.52, hp: 220, low: -18, f1Freq: 1650, f1Gain: 9, f2Freq: 3400, f2Gain: 12, high: 10 },
-      "boy-10": { pitch: 1.32, hp: 160, low: -12, f1Freq: 1400, f1Gain: 7, f2Freq: 3000, f2Gain: 8, high: 6 },
-      "boy-15": { pitch: 1.12, hp: 110, low: -4, f1Freq: 1150, f1Gain: 4, f2Freq: 2700, f2Gain: 5, high: 4 },
-      "boy-22": { pitch: 0.96, hp: 75, low: 6, f1Freq: 950, f1Gain: 3, f2Freq: 2400, f2Gain: 4, high: 3 },
-      "man-50": { pitch: 0.85, hp: 65, low: 12, f1Freq: 800, f1Gain: 4, f2Freq: 2100, f2Gain: -3, high: -4 },
-      "man-60": { pitch: 0.78, hp: 60, low: 15, f1Freq: 720, f1Gain: 5, f2Freq: 1900, f2Gain: -6, high: -7 },
-      "fbaby-6": { pitch: 1.62, hp: 240, low: -20, f1Freq: 1800, f1Gain: 11, f2Freq: 3600, f2Gain: 14, high: 12 },
-      "girl-10": { pitch: 1.42, hp: 185, low: -15, f1Freq: 1550, f1Gain: 9, f2Freq: 3300, f2Gain: 11, high: 9 },
-      "girl-15": { pitch: 1.28, hp: 160, low: -12, f1Freq: 1420, f1Gain: 8, f2Freq: 3100, f2Gain: 10, high: 8 },
-      "girl-22": { pitch: 1.22, hp: 145, low: -10, f1Freq: 1350, f1Gain: 7, f2Freq: 2950, f2Gain: 9, high: 8 },
-      "woman-50": { pitch: 1.10, hp: 120, low: -5, f1Freq: 1200, f1Gain: 5, f2Freq: 2650, f2Gain: 4, high: 3 },
-      "woman-60": { pitch: 1.03, hp: 110, low: -2, f1Freq: 1100, f1Gain: 4, f2Freq: 2400, f2Gain: 1, high: -2 }
-    };
-
-    const cfg = presets[presetId] || presets.natural;
-    const pitchFactor = cfg.pitch;
-    highpass.frequency.value = cfg.hp;
-    lowShelf.gain.value = cfg.low;
-    formant1.frequency.value = cfg.f1Freq;
-    formant1.gain.value = cfg.f1Gain;
-    formant2.frequency.value = cfg.f2Freq;
-    formant2.gain.value = cfg.f2Gain;
-    highShelf.gain.value = cfg.high;
-
-    source.connect(highpass);
-    highpass.connect(lowShelf);
-    lowShelf.connect(formant1);
-    formant1.connect(formant2);
-    formant2.connect(highShelf);
-
-    if (Math.abs(pitchFactor - 1.0) > 0.01 && typeof audioCtx.createScriptProcessor === "function") {
-      const bufSize = 2048;
-      const ringSize = bufSize * 4;
-      const ring = new Float32Array(ringSize);
-      let writePos = 0;
-      let readPos = 0;
-
-      const shifter = audioCtx.createScriptProcessor(bufSize, 1, 1);
-      shifter.onaudioprocess = (e) => {
-        const inp = e.inputBuffer.getChannelData(0);
-        const out = e.outputBuffer.getChannelData(0);
-        for (let i = 0; i < inp.length; i++) {
-          ring[writePos] = inp[i];
-          writePos = (writePos + 1) % ringSize;
-        }
-        for (let i = 0; i < out.length; i++) {
-          const idx0 = Math.floor(readPos) % ringSize;
-          const idx1 = (idx0 + 1) % ringSize;
-          const frac = readPos - Math.floor(readPos);
-          out[i] = ring[idx0] * (1 - frac) + ring[idx1] * frac;
-          readPos += pitchFactor;
-          if (readPos >= ringSize) readPos -= ringSize;
-        }
-      };
-      highShelf.connect(shifter);
-      shifter.connect(audioDestNode);
-    } else {
-      highShelf.connect(audioDestNode);
+    if (!hasMic && !hasSysAudio) {
+      mixedAudioStream = null;
+      return;
     }
 
-    const outTrack = audioDestNode.stream.getAudioTracks()[0];
-    if (outTrack) outTrack.enabled = !isMicMuted;
-    return outTrack;
+    if (hasMic && !hasSysAudio) {
+      mixedAudioStream = rawMicStream;
+      mixedAudioStream.getAudioTracks().forEach((t) => { t.enabled = !isMicMuted; });
+      return;
+    }
+
+    if (!hasMic && hasSysAudio) {
+      mixedAudioStream = new MediaStream(localScreenStream.getAudioTracks());
+      return;
+    }
+
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      audioMixCtx = new AudioContextClass();
+      const dest = audioMixCtx.createMediaStreamDestination();
+
+      const micSrc = audioMixCtx.createMediaStreamSource(rawMicStream);
+      micSrc.connect(dest);
+
+      const sysSrc = audioMixCtx.createMediaStreamSource(new MediaStream(localScreenStream.getAudioTracks()));
+      sysSrc.connect(dest);
+
+      mixedAudioStream = dest.stream;
+    } catch (e) {
+      mixedAudioStream = rawMicStream;
+    }
   }
 
   function buildFilteredVideoStream(inputCamStream, filterId) {
@@ -269,7 +209,11 @@
     return filteredStream;
   }
 
-  // Always broadcast Host's Screen/Board OR Host's Camera + Processed Voice to all students
+  function isScreenSharingActive() {
+    return Boolean((localScreenStream && localScreenStream.active) || (canvasFallbackStream && canvasFallbackStream.active));
+  }
+
+  // Primary Stream sent to Students (Shared Screen + Mixed Audio OR Host Camera + Mixed Audio)
   function getActiveBroadcastStream() {
     const combined = new MediaStream();
 
@@ -286,14 +230,13 @@
       processedVideoStream.getVideoTracks().forEach((t) => combined.addTrack(t));
     }
 
-    if (processedAudioStream && processedAudioStream.active) {
-      processedAudioStream.getAudioTracks().forEach((t) => combined.addTrack(t));
+    if (mixedAudioStream && mixedAudioStream.active) {
+      mixedAudioStream.getAudioTracks().forEach((t) => combined.addTrack(t));
     }
 
     return combined.getTracks().length > 0 ? combined : null;
   }
 
-  // Low-Lag Mobile & Tablet Board Canvas Stream (Caps resolution to 960px width & 10 FPS to prevent mobile CPU lag)
   function createLowLagBoardCanvasStream() {
     if (canvasBroadcastTimer) clearInterval(canvasBroadcastTimer);
 
@@ -316,8 +259,7 @@
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, targetW, targetH);
 
-      const canvases = document.querySelectorAll("canvas");
-      canvases.forEach((c) => {
+      document.querySelectorAll("canvas").forEach((c) => {
         if (c.id === "wbSnipPreviewCanvas") return;
         const st = window.getComputedStyle(c);
         if (st.display === "none" || st.visibility === "hidden" || c.classList.contains("hidden")) return;
@@ -331,7 +273,7 @@
     };
 
     renderBoardFrame();
-    canvasBroadcastTimer = setInterval(renderBoardFrame, 100); // Smooth 10 FPS without choking mobile CPU
+    canvasBroadcastTimer = setInterval(renderBoardFrame, 100);
     return composite.captureStream(10);
   }
 
@@ -348,6 +290,7 @@
       localScreenStream.getTracks().forEach((t) => t.stop());
       localScreenStream = null;
     }
+    rebuildMixedAudioStream();
   }
 
   function updateStudentCountBadge() {
@@ -449,27 +392,109 @@
     broadcastToAllStudents({ type: "roster-update", roster });
   }
 
+  // Broadcast Main Stream + Secondary Round Host Camera Stream during Screen Share
   function broadcastStreamToAllStudents() {
     const stream = getActiveBroadcastStream();
+    const sharing = isScreenSharingActive();
     const hasActiveVideo = Boolean(stream && stream.getVideoTracks().length > 0);
+
     broadcastToAllStudents({
       type: "host-stage-state",
       hasActiveVideo,
       teacherName: teacherDisplayName
     });
 
-    if (!stream || !classPeer) return;
+    if (!classPeer) return;
+
     connectedStudents.forEach((student, studentPeerId) => {
       try {
         if (student.mediaCall) student.mediaCall.close();
-        student.mediaCall = classPeer.call(studentPeerId, stream);
+        if (stream) {
+          student.mediaCall = classPeer.call(studentPeerId, stream, {
+            metadata: { streamRole: sharing ? "screen-share" : "host-cam" }
+          });
+        }
+      } catch (e) {}
+
+      // Send Host's Camera separately for the movable Round Bubble on Student screen during Screen Share
+      try {
+        if (student.roundCamCall) {
+          student.roundCamCall.close();
+          student.roundCamCall = null;
+        }
+        if (sharing && !isCamOff && processedVideoStream && processedVideoStream.getVideoTracks().length > 0) {
+          student.roundCamCall = classPeer.call(studentPeerId, processedVideoStream, {
+            metadata: { streamRole: "host-round-cam" }
+          });
+        }
       } catch (e) {}
     });
   }
 
-  // Decide who appears on Host's front Main Stage:
-  // - By default ("auto"): shows first connected student when students are present; shows Host self-view when 0 students
-  // - Or shows whichever specific student/host the Host pinned
+  // Update Host's Movable & Minimizable Round Student Bubble during Screen Share
+  function updateHostRoundStudentBubble() {
+    const bubble = document.getElementById("iqraHostRoundStudentBubble");
+    const vid = document.getElementById("iqraHostRoundStudentVid");
+    const initialsEl = document.getElementById("iqraHostRoundStudentInitials");
+    const labelEl = document.getElementById("iqraHostRoundStudentName");
+    if (!bubble) return;
+
+    if (!isScreenSharingActive() || connectedStudents.size === 0) {
+      bubble.style.display = "none";
+      return;
+    }
+
+    // Pick active speaking student, or pinned student, or first student
+    let targetStudent = null;
+    if (activeSpeakingStudentId && connectedStudents.has(activeSpeakingStudentId)) {
+      targetStudent = connectedStudents.get(activeSpeakingStudentId);
+    } else if (hostStageTargetId !== "auto" && hostStageTargetId !== "host" && connectedStudents.has(hostStageTargetId)) {
+      targetStudent = connectedStudents.get(hostStageTargetId);
+    } else {
+      targetStudent = connectedStudents.values().next().value;
+    }
+
+    if (!targetStudent) {
+      bubble.style.display = "none";
+      return;
+    }
+
+    bubble.style.display = "flex";
+    const hasVid = targetStudent.camOn && targetStudent.incomingStream && targetStudent.incomingStream.getVideoTracks().length > 0;
+
+    if (isHostRoundBubbleMinimized) {
+      bubble.style.width = "40px";
+      bubble.style.height = "40px";
+      if (vid) vid.style.display = "none";
+      if (initialsEl) {
+        initialsEl.style.display = "flex";
+        initialsEl.style.fontSize = "12px";
+        initialsEl.textContent = getInitials(targetStudent.name);
+      }
+      if (labelEl) labelEl.style.display = "none";
+    } else {
+      bubble.style.width = "108px";
+      bubble.style.height = "108px";
+      if (labelEl) {
+        labelEl.style.display = "block";
+        labelEl.textContent = targetStudent.name;
+      }
+      if (hasVid && vid) {
+        vid.style.display = "block";
+        vid.srcObject = targetStudent.incomingStream;
+        vid.play().catch(() => {});
+        if (initialsEl) initialsEl.style.display = "none";
+      } else {
+        if (vid) vid.style.display = "none";
+        if (initialsEl) {
+          initialsEl.style.display = "flex";
+          initialsEl.style.fontSize = "22px";
+          initialsEl.textContent = getInitials(targetStudent.name);
+        }
+      }
+    }
+  }
+
   function resolveHostFrontTarget() {
     if (hostStageTargetId === "host") return { mode: "host" };
 
@@ -489,6 +514,28 @@
     const preview = document.getElementById("iqraTeacherPreviewVideo");
     const placeholder = document.getElementById("iqraTeacherPlaceholder");
     if (!preview || !placeholder) return;
+
+    updateHostRoundStudentBubble();
+
+    // During screen share, show screen share status on stage + round student bubble in corner
+    if (isScreenSharingActive()) {
+      if (localScreenStream && localScreenStream.active) {
+        preview.srcObject = localScreenStream;
+        preview.style.display = "block";
+        placeholder.style.display = "none";
+      } else {
+        preview.style.display = "none";
+        placeholder.style.display = "flex";
+        placeholder.innerHTML = `
+          <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(22, 163, 74, 0.16); color: #22c55e; font-size: 22px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+            <i class="fa-solid fa-display"></i>
+          </div>
+          <div style="font-size: 13.5px; font-weight: 700; color: #f8fafc;">Sharing Screen Live</div>
+          <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Students are viewing your screen</div>
+        `;
+      }
+      return;
+    }
 
     const front = resolveHostFrontTarget();
 
@@ -516,29 +563,6 @@
       return;
     }
 
-    // Host self-stage view (when 0 students or Host clicked "My Preview")
-    const isMobileCanvasSharing = Boolean(canvasFallbackStream && canvasFallbackStream.active);
-    if (isMobileCanvasSharing) {
-      // Avoid recursive mirror lag on mobile when sharing own board canvas
-      preview.style.display = "none";
-      placeholder.style.display = "flex";
-      placeholder.innerHTML = `
-        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(22, 163, 74, 0.16); color: #22c55e; font-size: 22px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
-          <i class="fa-solid fa-display"></i>
-        </div>
-        <div style="font-size: 13.5px; font-weight: 700; color: #f8fafc;">Broadcasting Board Live</div>
-        <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Students are viewing your live whiteboard & PDF</div>
-      `;
-      return;
-    }
-
-    if (localScreenStream && localScreenStream.active) {
-      preview.srcObject = localScreenStream;
-      preview.style.display = "block";
-      placeholder.style.display = "none";
-      return;
-    }
-
     if (!isCamOff && processedVideoStream && processedVideoStream.getVideoTracks().length > 0) {
       preview.srcObject = processedVideoStream;
       preview.style.display = "block";
@@ -554,11 +578,10 @@
         ${teacherAvatarDataUrl ? `<img src="${teacherAvatarDataUrl}" style="width:100%;height:100%;object-fit:cover;" />` : escapeHtml(hostInitials)}
       </div>
       <div style="font-size: 13px; font-weight: 700; color: #f8fafc;">${escapeHtml(teacherDisplayName)}</div>
-      <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Click <b>Share Board</b> below to broadcast your screen</div>
+      <div style="font-size: 11px; color: #94a3b8; margin-top: 3px;">Click <b>Share Screen</b> below to broadcast your screen</div>
     `;
   }
 
-  // Render Host Right-Side Students Panel (Shows Host Self-Card + All Student Cards with Pin, Kick, Separate Mic/Cam Disable)
   function renderHostParticipantsList() {
     const listEl = document.getElementById("iqraHostParticipantsList");
     if (!listEl) return;
@@ -566,7 +589,6 @@
     listEl.innerHTML = "";
     const front = resolveHostFrontTarget();
 
-    // 1. Host's Own Self-Card at top of right panel (allows switching front stage back to Host preview)
     const hostSelfCard = document.createElement("div");
     const isHostFront = front.mode === "host";
     hostSelfCard.style.cssText = `
@@ -609,7 +631,6 @@
       return;
     }
 
-    // 2. Connected Students Cards
     connectedStudents.forEach((student, pid) => {
       const card = document.createElement("div");
       const isFront = front.mode === "student" && front.pid === pid;
@@ -636,7 +657,6 @@
           </div>
         </div>
 
-        <!-- Row 1: Pin to Front Stage + Remove Student -->
         <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 4px;">
           <button type="button" data-act="spotlight" data-pid="${pid}" style="
             background: ${isFront ? "#0284c7" : "#334155"}; color: #f8fafc; border: none;
@@ -652,7 +672,6 @@
           </button>
         </div>
 
-        <!-- Row 2: Separate Audio Disable & Video Disable Controls -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
           <button type="button" data-act="toggle-lock-mic" data-pid="${pid}" title="Disable / Enable Student Microphone" style="
             background: ${student.micLocked ? "#dc2626" : "#0f172a"};
@@ -693,6 +712,7 @@
 
         if (act === "spotlight") {
           hostStageTargetId = pid;
+          activeSpeakingStudentId = pid;
           refreshHostStagePreview();
         } else if (act === "toggle-lock-mic") {
           st.micLocked = !st.micLocked;
@@ -715,8 +735,10 @@
           setTimeout(() => {
             try { st.conn.close(); } catch (e) {}
             if (st.mediaCall) { try { st.mediaCall.close(); } catch (e) {} }
+            if (st.roundCamCall) { try { st.roundCamCall.close(); } catch (e) {} }
             connectedStudents.delete(pid);
             if (hostStageTargetId === pid) hostStageTargetId = "auto";
+            if (activeSpeakingStudentId === pid) activeSpeakingStudentId = null;
             updateStudentCountBadge();
             renderHostParticipantsList();
             syncRosterToAllStudents();
@@ -729,6 +751,28 @@
         syncRosterToAllStudents();
       };
     });
+  }
+
+  function updateHostMediaButtonColors() {
+    const micBtn = document.getElementById("btnToggleMic");
+    const camBtn = document.getElementById("btnToggleCam");
+    const hasMic = Boolean(rawMicStream && rawMicStream.getAudioTracks().length > 0);
+    const hasCam = Boolean(rawCamStream && rawCamStream.getVideoTracks().length > 0);
+
+    if (micBtn) {
+      const active = hasMic && !isMicMuted;
+      micBtn.style.background = active ? "#16a34a" : "#dc2626";
+      micBtn.innerHTML = active
+        ? `<i class="fa-solid fa-microphone"></i> Mic On`
+        : `<i class="fa-solid fa-microphone-slash"></i> Mic Off`;
+    }
+    if (camBtn) {
+      const active = hasCam && !isCamOff;
+      camBtn.style.background = active ? "#16a34a" : "#dc2626";
+      camBtn.innerHTML = active
+        ? `<i class="fa-solid fa-video"></i> Cam On`
+        : `<i class="fa-solid fa-video-slash"></i> Cam Off`;
+    }
   }
 
   async function acquireHostMedia(micId, camId) {
@@ -748,6 +792,7 @@
       });
     } catch (e) {
       rawMicStream = null;
+      isMicMuted = true;
     }
 
     try {
@@ -757,15 +802,10 @@
       });
     } catch (e) {
       rawCamStream = null;
+      isCamOff = true;
     }
 
-    if (rawMicStream) {
-      const procAudioTrack = buildProcessedAudioTrack(rawMicStream, selectedVoicePreset);
-      processedAudioStream = procAudioTrack ? new MediaStream([procAudioTrack]) : rawMicStream;
-      processedAudioStream.getAudioTracks().forEach((t) => { t.enabled = !isMicMuted; });
-    } else {
-      processedAudioStream = null;
-    }
+    rebuildMixedAudioStream();
 
     if (rawCamStream) {
       processedVideoStream = buildFilteredVideoStream(rawCamStream, selectedVideoFilter);
@@ -776,12 +816,13 @@
       processedVideoStream = null;
     }
 
+    updateHostMediaButtonColors();
     refreshHostStagePreview();
     broadcastStreamToAllStudents();
     syncRosterToAllStudents();
   }
 
-  // Settings Modal: Mic, Camera, Video Filter, 12 Age/Gender Voice Filters & Profile Photo
+  // Settings Modal (Microphone, Camera, Video Filter & Profile Photo — No Voice Changer)
   async function openHostDeviceSettingsModal() {
     const existing = document.getElementById("iqraLiveSettingsModal");
     if (existing) existing.remove();
@@ -815,14 +856,10 @@
       (f) => `<option value="${f.id}" ${f.id === selectedVideoFilter ? "selected" : ""}>${escapeHtml(f.label)}</option>`
     ).join("");
 
-    const voicePresetOptions = VOICE_PRESETS.map(
-      (v) => `<option value="${v.id}" ${v.id === selectedVoicePreset ? "selected" : ""}>${escapeHtml(v.label)}</option>`
-    ).join("");
-
     modal.innerHTML = `
-      <div style="background: #ffffff; width: 410px; max-width: 94vw; max-height: 90vh; overflow-y: auto; border-radius: 16px; padding: 20px; box-shadow: 0 20px 44px rgba(0,0,0,0.3); position: relative;">
+      <div style="background: #ffffff; width: 400px; max-width: 94vw; max-height: 90vh; overflow-y: auto; border-radius: 16px; padding: 20px; box-shadow: 0 20px 44px rgba(0,0,0,0.3); position: relative;">
         <button id="closeHostSettingsModal" type="button" style="position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; border-radius: 50%; border: none; background: #f1f5f9; color: #475569; cursor: pointer;">✕</button>
-        <h4 style="margin: 0 0 14px; font-size: 16px; font-weight: 800; color: #0f172a;">Studio Audio, Video & Voice Settings</h4>
+        <h4 style="margin: 0 0 14px; font-size: 16px; font-weight: 800; color: #0f172a;">Audio, Video & Profile Settings</h4>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
           <div>
@@ -841,19 +878,10 @@
 
         <div style="margin-bottom: 12px;">
           <label style="display: block; font-size: 11.5px; font-weight: 700; color: #0284c7; margin-bottom: 4px;">
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Live Video Filter
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Camera Video Filter
           </label>
           <select id="iqraVideoFilterSelect" style="width: 100%; padding: 8px 10px; border: 1.5px solid #bae6fd; background: #f0f9ff; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0f172a;">
             ${videoFilterOptions}
-          </select>
-        </div>
-
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; font-size: 11.5px; font-weight: 700; color: #16a34a; margin-bottom: 4px;">
-            <i class="fa-solid fa-sliders"></i> Live Voice Audio Filter (12 Voices)
-          </label>
-          <select id="iqraVoicePresetSelect" style="width: 100%; padding: 8px 10px; border: 1.5px solid #bbf7d0; background: #f0fdf4; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0f172a;">
-            ${voicePresetOptions}
           </select>
         </div>
 
@@ -886,7 +914,6 @@
       selectedMicId = document.getElementById("iqraMicSelect").value;
       selectedCamId = document.getElementById("iqraCamSelect").value;
       selectedVideoFilter = document.getElementById("iqraVideoFilterSelect").value;
-      selectedVoicePreset = document.getElementById("iqraVoicePresetSelect").value;
       modal.remove();
 
       const headerAvatar = document.getElementById("iqraHostHeaderAvatar");
@@ -896,11 +923,10 @@
 
       await acquireHostMedia(selectedMicId, selectedCamId);
       renderHostParticipantsList();
-      showLiveToast("Video filter, voice preset & device settings applied.");
+      showLiveToast("Audio, video & profile settings applied.");
     };
   }
 
-  // Dual Host Exit Modal: Option 1 (Leave Class Only) vs Option 2 (End Class for All)
   function askHostExitOptions(onLeaveOnly, onEndForAll) {
     const existing = document.getElementById("iqraHostExitModal");
     if (existing) existing.remove();
@@ -950,14 +976,15 @@
   }
 
   function cleanupTeacherSession(endForAll) {
+    releaseHostWakeLock();
     stopBoardSharingStreams();
     if (videoFilterLoopId) {
       cancelAnimationFrame(videoFilterLoopId);
       videoFilterLoopId = null;
     }
-    if (audioCtx) {
-      try { audioCtx.close(); } catch (e) {}
-      audioCtx = null;
+    if (audioMixCtx) {
+      try { audioMixCtx.close(); } catch (e) {}
+      audioMixCtx = null;
     }
     if (rawMicStream) {
       rawMicStream.getTracks().forEach((t) => t.stop());
@@ -975,6 +1002,7 @@
           if (endForAll) student.conn.close();
         }
         if (student.mediaCall) student.mediaCall.close();
+        if (student.roundCamCall) student.roundCamCall.close();
       } catch (e) {}
     });
 
@@ -993,6 +1021,7 @@
     isWallMinimized = false;
     isFullSizePanel = false;
     hostStageTargetId = "auto";
+    activeSpeakingStudentId = null;
     unreadMessages = 0;
 
     const panel = document.getElementById("iqraLiveClassPanel");
@@ -1001,7 +1030,6 @@
     if (wallTab) wallTab.remove();
   }
 
-  // Sleek, Semi-Transparent & Vertically Draggable Left-Wall Dock Handle
   function toggleLeftWallMinimize(minimize) {
     const panel = document.getElementById("iqraLiveClassPanel");
     if (!panel) return;
@@ -1095,7 +1123,6 @@
     }
   }
 
-  // Step 1: Host Lobby Modal
   function openHostLobbyModal() {
     if (isHostingActive) {
       toggleLeftWallMinimize(false);
@@ -1220,9 +1247,10 @@
     };
   }
 
-  // Step 2: Active Teacher Studio Panel
   async function launchTeacherBroadcastPanel() {
     isHostingActive = true;
+    enableHostWakeLock();
+
     const inviteLink = getStudentClassUrl(activeRoomSlug);
     const hostInitials = getInitials(teacherDisplayName);
 
@@ -1304,10 +1332,29 @@
 
       <!-- Main Stage + Right Participants/Chat Panel -->
       <div style="flex: 1; display: flex; overflow: hidden; background: #020617;">
-        <div id="iqraLiveFrameWrap" style="position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 8px;">
-          <div style="width: 100%; height: 100%; border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000000; position: relative;">
+        <div id="iqraLiveFrameWrap" style="position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 0;">
+          <div style="width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000000; position: relative;">
             <video id="iqraTeacherPreviewVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: contain; display: none; background: #000;"></video>
             <div id="iqraTeacherPlaceholder" style="display: flex; flex-direction: column; align-items: center; text-align: center; color: #94a3b8; padding: 16px;"></div>
+
+            <!-- Movable & Minimizable Round Student Bubble (Shown during Screen Share) -->
+            <div id="iqraHostRoundStudentBubble" style="
+              display: none; position: absolute; bottom: 12px; right: 12px;
+              width: 108px; height: 108px; border-radius: 50%;
+              border: 2.5px solid #22c55e; background: #0f172a;
+              box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+              overflow: hidden; z-index: 35; cursor: grab; touch-action: none;
+              align-items: center; justify-content: center; flex-direction: column;
+            ">
+              <video id="iqraHostRoundStudentVid" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; display: none;"></video>
+              <div id="iqraHostRoundStudentInitials" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #ffffff; font-weight: 800; font-size: 22px; background: #0284c7;">ST</div>
+              <div id="iqraHostRoundStudentName" style="position: absolute; bottom: 8px; left: 8px; right: 8px; text-align: center; font-size: 9.5px; font-weight: 700; color: #fff; background: rgba(15,23,42,0.78); border-radius: 6px; padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Student</div>
+              <button id="btnMinHostRoundBubble" type="button" title="Minimize / Expand Student Bubble" style="
+                position: absolute; top: 4px; right: 4px; width: 18px; height: 18px;
+                border-radius: 50%; border: none; background: rgba(15,23,42,0.85);
+                color: #f8fafc; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+              ">—</button>
+            </div>
           </div>
         </div>
 
@@ -1341,18 +1388,18 @@
         </div>
       </div>
 
-      <!-- Bottom Controls Bar -->
+      <!-- Bottom Controls Bar (Red when Off, Green when On) -->
       <div style="background: #1e293b; padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 7px; border-top: 1px solid #334155;">
-        <button id="btnToggleMic" type="button" style="background: #334155; color: #f8fafc; border: none; border-radius: 8px; padding: 5px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
-          <i class="fa-solid fa-microphone"></i> Mic
+        <button id="btnToggleMic" type="button" style="background: #dc2626; color: #ffffff; border: none; border-radius: 8px; padding: 5px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
+          <i class="fa-solid fa-microphone-slash"></i> Mic Off
         </button>
-        <button id="btnToggleCam" type="button" style="background: #334155; color: #f8fafc; border: none; border-radius: 8px; padding: 5px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
-          <i class="fa-solid fa-video"></i> Cam
+        <button id="btnToggleCam" type="button" style="background: #dc2626; color: #ffffff; border: none; border-radius: 8px; padding: 5px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
+          <i class="fa-solid fa-video-slash"></i> Cam Off
         </button>
-        <button id="btnShareBoardScreen" type="button" style="background: #16a34a; color: #ffffff; border: none; border-radius: 8px; padding: 5px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
-          <i class="fa-solid fa-display"></i> Share Board
+        <button id="btnShareBoardScreen" type="button" style="background: #0284c7; color: #ffffff; border: none; border-radius: 8px; padding: 5px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer;">
+          <i class="fa-solid fa-display"></i> Share Screen
         </button>
-        <button id="btnHostDeviceSettings" type="button" title="Audio, Video & Voice Settings" style="background: #334155; color: #f8fafc; border: none; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
+        <button id="btnHostDeviceSettings" type="button" title="Audio, Video & Profile Settings" style="background: #334155; color: #f8fafc; border: none; border-radius: 8px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
           <i class="fa-solid fa-gear"></i>
         </button>
       </div>
@@ -1360,6 +1407,7 @@
 
     document.body.appendChild(container);
     makeElementDraggable(container, document.getElementById("iqraLiveClassHeader"));
+    initHostRoundBubbleDragAndMin();
     renderHostParticipantsList();
     refreshHostStagePreview();
 
@@ -1396,6 +1444,7 @@
           connectedStudents.set(conn.peer, {
             conn,
             mediaCall: null,
+            roundCamCall: null,
             incomingStream: null,
             name: "Student",
             micOn: false,
@@ -1418,12 +1467,23 @@
           syncRosterToAllStudents();
 
           const stream = getActiveBroadcastStream();
+          const sharing = isScreenSharingActive();
           const hasActiveVideo = Boolean(stream && stream.getVideoTracks().length > 0);
           conn.send({ type: "host-stage-state", hasActiveVideo, teacherName: teacherDisplayName });
+
           if (stream) {
-            const call = classPeer.call(conn.peer, stream);
+            const call = classPeer.call(conn.peer, stream, {
+              metadata: { streamRole: sharing ? "screen-share" : "host-cam" }
+            });
             const entry = connectedStudents.get(conn.peer);
             if (entry) entry.mediaCall = call;
+          }
+          if (sharing && !isCamOff && processedVideoStream && processedVideoStream.getVideoTracks().length > 0) {
+            const rCall = classPeer.call(conn.peer, processedVideoStream, {
+              metadata: { streamRole: "host-round-cam" }
+            });
+            const entry = connectedStudents.get(conn.peer);
+            if (entry) entry.roundCamCall = rCall;
           }
         });
 
@@ -1452,6 +1512,11 @@
               refreshHostStagePreview();
               syncRosterToAllStudents();
             }
+          } else if (data.type === "student-speaking") {
+            if (data.speaking && entry) {
+              activeSpeakingStudentId = conn.peer;
+              updateHostRoundStudentBubble();
+            }
           } else if (data.type === "chat-message") {
             const sender = (entry && entry.name) || data.sender || "Student";
             appendChatMessage(sender, data.text, false, false);
@@ -1461,10 +1526,7 @@
             appendChatMessage("System", `✋ ${sender} raised their hand.`, false, true);
             showLiveToast(`✋ ${sender} raised their hand!`);
           } else if (data.type === "request-stream") {
-            const stream = getActiveBroadcastStream();
-            if (stream && entry) {
-              entry.mediaCall = classPeer.call(conn.peer, stream);
-            }
+            broadcastStreamToAllStudents();
           }
         });
 
@@ -1473,6 +1535,7 @@
           const leftName = (entry && entry.name) || "Student";
           connectedStudents.delete(conn.peer);
           if (hostStageTargetId === conn.peer) hostStageTargetId = "auto";
+          if (activeSpeakingStudentId === conn.peer) activeSpeakingStudentId = null;
           updateStudentCountBadge();
           renderHostParticipantsList();
           syncRosterToAllStudents();
@@ -1519,7 +1582,7 @@
         container.style.right = "0px";
         container.style.bottom = "0px";
         container.style.width = "100vw";
-        container.style.height = "100vh";
+        container.style.height = "100dvh";
         container.style.borderRadius = "0px";
         container.style.border = "none";
         container.style.resize = "none";
@@ -1592,16 +1655,16 @@
 
     const micBtn = document.getElementById("btnToggleMic");
     micBtn.onclick = () => {
-      if (!processedAudioStream || !processedAudioStream.getAudioTracks().length) {
+      if (!rawMicStream || !rawMicStream.getAudioTracks().length) {
         showLiveToast("No microphone detected on this device.");
         return;
       }
       isMicMuted = !isMicMuted;
-      processedAudioStream.getAudioTracks().forEach((t) => { t.enabled = !isMicMuted; });
-      micBtn.innerHTML = isMicMuted
-        ? `<i class="fa-solid fa-microphone-slash"></i> Muted`
-        : `<i class="fa-solid fa-microphone"></i> Mic`;
-      micBtn.style.background = isMicMuted ? "#dc2626" : "#334155";
+      rawMicStream.getAudioTracks().forEach((t) => { t.enabled = !isMicMuted; });
+      if (mixedAudioStream) {
+        mixedAudioStream.getAudioTracks().forEach((t) => { t.enabled = !isMicMuted; });
+      }
+      updateHostMediaButtonColors();
       syncRosterToAllStudents();
     };
 
@@ -1613,66 +1676,60 @@
       }
       isCamOff = !isCamOff;
       processedVideoStream.getVideoTracks().forEach((t) => { t.enabled = !isCamOff; });
-      camBtn.innerHTML = isCamOff
-        ? `<i class="fa-solid fa-video-slash"></i> Off`
-        : `<i class="fa-solid fa-video"></i> Cam`;
-      camBtn.style.background = isCamOff ? "#dc2626" : "#334155";
+      updateHostMediaButtonColors();
       refreshHostStagePreview();
       broadcastStreamToAllStudents();
       syncRosterToAllStudents();
     };
 
+    // Share Screen with System/Tab Audio Support on Both PC & Tablet/Mobile
     const shareBtn = document.getElementById("btnShareBoardScreen");
     shareBtn.onclick = async () => {
-      if (localScreenStream || canvasFallbackStream) {
+      if (isScreenSharingActive()) {
         stopBoardSharingStreams();
-        shareBtn.innerHTML = `<i class="fa-solid fa-display"></i> Share Board`;
-        shareBtn.style.background = "#16a34a";
+        shareBtn.innerHTML = `<i class="fa-solid fa-display"></i> Share Screen`;
+        shareBtn.style.background = "#0284c7";
         refreshHostStagePreview();
         broadcastStreamToAllStudents();
-        showLiveToast("Board sharing stopped.");
+        showLiveToast("Screen sharing stopped.");
         return;
       }
 
-      const canUseOsDisplayMedia =
-        navigator.mediaDevices &&
-        typeof navigator.mediaDevices.getDisplayMedia === "function" &&
-        !/Android/i.test(navigator.userAgent);
-
-      if (canUseOsDisplayMedia) {
+      if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === "function") {
         try {
           localScreenStream = await navigator.mediaDevices.getDisplayMedia({
             video: { frameRate: { ideal: 24, max: 30 } },
-            audio: false
+            audio: true // Enables sharing video/tab audio along with screen
           });
           const track = localScreenStream.getVideoTracks()[0];
           if (track) {
             track.onended = () => {
               stopBoardSharingStreams();
-              shareBtn.innerHTML = `<i class="fa-solid fa-display"></i> Share Board`;
-              shareBtn.style.background = "#16a34a";
+              shareBtn.innerHTML = `<i class="fa-solid fa-display"></i> Share Screen`;
+              shareBtn.style.background = "#0284c7";
               refreshHostStagePreview();
               broadcastStreamToAllStudents();
             };
           }
+          rebuildMixedAudioStream();
           shareBtn.innerHTML = `<i class="fa-solid fa-stop"></i> Stop Share`;
-          shareBtn.style.background = "#d97706";
+          shareBtn.style.background = "#16a34a";
           refreshHostStagePreview();
           broadcastStreamToAllStudents();
-          showLiveToast("Broadcasting screen to students.");
+          showLiveToast("Screen & audio sharing started.");
           return;
         } catch (err) {
           if (err && err.name === "NotAllowedError") return;
         }
       }
 
-      // Low-Lag Mobile & Tablet Board Stream
+      // Automatic fallback only for browsers without native screen capture
       canvasFallbackStream = createLowLagBoardCanvasStream();
-      shareBtn.innerHTML = `<i class="fa-solid fa-stop"></i> Stop Board`;
-      shareBtn.style.background = "#d97706";
+      shareBtn.innerHTML = `<i class="fa-solid fa-stop"></i> Stop Share`;
+      shareBtn.style.background = "#16a34a";
       refreshHostStagePreview();
       broadcastStreamToAllStudents();
-      showLiveToast("Broadcasting whiteboard & PDF smoothly.");
+      showLiveToast("Broadcasting whiteboard & PDF live.");
     };
 
     document.getElementById("btnHostDeviceSettings").onclick = openHostDeviceSettingsModal;
@@ -1689,6 +1746,56 @@
         }
       );
     };
+  }
+
+  function initHostRoundBubbleDragAndMin() {
+    const bubble = document.getElementById("iqraHostRoundStudentBubble");
+    const minBtn = document.getElementById("btnMinHostRoundBubble");
+    if (!bubble || !minBtn) return;
+
+    minBtn.onclick = (e) => {
+      e.stopPropagation();
+      isHostRoundBubbleMinimized = !isHostRoundBubbleMinimized;
+      minBtn.textContent = isHostRoundBubbleMinimized ? "+" : "—";
+      updateHostRoundStudentBubble();
+    };
+
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    bubble.addEventListener("pointerdown", (e) => {
+      if (e.target === minBtn) return;
+      e.preventDefault();
+      dragging = true;
+      bubble.style.cursor = "grabbing";
+      const rect = bubble.getBoundingClientRect();
+      const parentRect = bubble.parentElement.getBoundingClientRect();
+      origLeft = rect.left - parentRect.left;
+      origTop = rect.top - parentRect.top;
+      startX = e.clientX;
+      startY = e.clientY;
+      bubble.style.right = "auto";
+      bubble.style.bottom = "auto";
+      bubble.style.left = `${origLeft}px`;
+      bubble.style.top = `${origTop}px`;
+      try { bubble.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+
+    bubble.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const parentRect = bubble.parentElement.getBoundingClientRect();
+      const maxLeft = Math.max(0, parentRect.width - bubble.offsetWidth);
+      const maxTop = Math.max(0, parentRect.height - bubble.offsetHeight);
+      bubble.style.left = `${Math.max(0, Math.min(maxLeft, origLeft + (e.clientX - startX)))}px`;
+      bubble.style.top = `${Math.max(0, Math.min(maxTop, origTop + (e.clientY - startY)))}px`;
+    });
+
+    const endDrag = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      bubble.style.cursor = "grab";
+      try { bubble.releasePointerCapture(e.pointerId); } catch (err) {}
+    };
+    bubble.addEventListener("pointerup", endDrag);
+    bubble.addEventListener("pointercancel", endDrag);
   }
 
   function makeElementDraggable(el, handle) {

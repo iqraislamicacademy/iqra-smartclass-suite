@@ -2,16 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Iqra Islamic Academy — Live Classroom</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <style>
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body {
-      margin: 0; padding: 0; width: 100%; height: 100%;
+      margin: 0; padding: 0;
+      width: 100%; height: 100vh; height: 100dvh;
       background: #020617; color: #f8fafc;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       overflow: hidden;
     }
   </style>
@@ -30,17 +33,17 @@
       <input id="studentNameInput" type="text" placeholder="Enter your First & Last Name..." style="
         width: 100%; padding: 11px 13px; border-radius: 11px;
         border: 1.5px solid #334155; background: #1e293b; color: #f8fafc;
-        font-size: 14px; margin-bottom: 12px; outline: none;
+        font-size: 16px; margin-bottom: 12px; outline: none;
       " />
       <button id="btnJoinClassroom" type="button" style="
-        width: 100%; padding: 11px; border-radius: 11px; border: none;
-        background: #16a34a; color: #ffffff; font-size: 14px; font-weight: 700; cursor: pointer;
+        width: 100%; padding: 12px; border-radius: 11px; border: none;
+        background: #16a34a; color: #ffffff; font-size: 14.5px; font-weight: 700; cursor: pointer;
       ">Join Class Now</button>
     </div>
   </div>
 
   <!-- Main Student Classroom Layout -->
-  <div style="display: flex; flex-direction: column; width: 100%; height: 100%;">
+  <div id="classroomRoot" style="display: flex; flex-direction: column; width: 100%; height: 100%;">
     <!-- Top Header -->
     <header style="background: #0f172a; padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; gap: 10px; flex-shrink: 0;">
       <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
@@ -56,6 +59,9 @@
       </div>
 
       <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+        <button id="btnFitFillToggle" type="button" title="Toggle Full Area Stretch / Fit" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
+          <i class="fa-solid fa-up-right-and-down-left-from-center"></i> Full Area
+        </button>
         <button id="btnToggleSidebar" type="button" style="position: relative; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 600; cursor: pointer;">
           <i class="fa-solid fa-table-columns"></i> Panel
           <span id="unreadBadge" style="display: none; position: absolute; top: -5px; right: -5px; background: #ef4444; color: #fff; font-size: 9px; font-weight: 700; min-width: 15px; height: 15px; border-radius: 999px; align-items: center; justify-content: center; padding: 0 3px;">0</span>
@@ -67,11 +73,11 @@
     </header>
 
     <!-- Center Stage + Collapsible Right Sidebar -->
-    <main style="flex: 1; display: flex; overflow: hidden; position: relative;">
-      <!-- Main Stage: Always shows Host (Teacher Video or Shared Board) in Front -->
-      <section style="flex: 1; display: flex; align-items: center; justify-content: center; background: #020617; padding: 8px; overflow: hidden; position: relative;">
-        <div id="stageFrameContainer" style="width: 100%; height: 100%; border-radius: 14px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000000; position: relative;">
-          <video id="mainStageVideo" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain; display: none;"></video>
+    <main style="flex: 1; display: flex; overflow: hidden; position: relative; width: 100%;">
+      <!-- Main Stage: Full Edge-to-Edge Area (Zero Black Side Padding) -->
+      <section style="flex: 1; display: flex; align-items: center; justify-content: center; background: #000000; padding: 0; overflow: hidden; position: relative; width: 100%; height: 100%;">
+        <div id="stageFrameContainer" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #000000; position: relative;">
+          <video id="mainStageVideo" autoplay playsinline webkit-playsinline style="width: 100%; height: 100%; object-fit: fill; display: none; background: #000000;"></video>
 
           <div id="stageWaitingBox" style="text-align: center; padding: 24px; max-width: 380px;">
             <div id="stageHostAvatarBox" style="width: 64px; height: 64px; border-radius: 50%; background: rgba(56, 189, 248, 0.14); color: #38bdf8; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; margin: 0 auto 14px; overflow: hidden;">
@@ -81,6 +87,17 @@
             <p id="stageWaitingText" style="margin: 0; font-size: 13px; color: #94a3b8; line-height: 1.5;">
               Waiting for the host to start video or screen broadcast...
             </p>
+          </div>
+
+          <!-- Draggable Round Host Camera Bubble (Shown during Screen Share so Student sees Board + Teacher) -->
+          <div id="hostRoundCamBubble" style="
+            display: none; position: absolute; bottom: 16px; right: 16px;
+            width: 112px; height: 112px; border-radius: 50%;
+            border: 3px solid #38bdf8; background: #0f172a;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.65);
+            overflow: hidden; z-index: 30; cursor: grab; touch-action: none;
+          ">
+            <video id="hostRoundCamVideo" autoplay playsinline webkit-playsinline muted style="width: 100%; height: 100%; object-fit: cover;"></video>
           </div>
         </div>
       </section>
@@ -105,7 +122,7 @@
           <div style="padding: 8px; border-top: 1px solid #1e293b; display: flex; gap: 6px;">
             <input id="chatInput" type="text" placeholder="Type a message..." style="
               flex: 1; min-width: 0; background: #1e293b; border: 1px solid #334155;
-              border-radius: 8px; padding: 7px 10px; font-size: 12.5px; color: #f8fafc; outline: none;
+              border-radius: 8px; padding: 7px 10px; font-size: 16px; color: #f8fafc; outline: none;
             " />
             <button id="btnSendChat" type="button" style="
               background: #0284c7; color: #ffffff; border: none; border-radius: 8px;
@@ -119,18 +136,18 @@
       </aside>
     </main>
 
-    <!-- Bottom Student Control Bar -->
-    <footer style="background: #0f172a; padding: 8px 14px; display: flex; align-items: center; justify-content: center; gap: 10px; border-top: 1px solid #1e293b; flex-shrink: 0; flex-wrap: wrap;">
-      <button id="btnMicToggle" type="button" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
+    <!-- Bottom Student Control Bar (Red when Off, Green when On) -->
+    <footer style="background: #0f172a; padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; gap: 10px; border-top: 1px solid #1e293b; flex-shrink: 0; flex-wrap: wrap;">
+      <button id="btnMicToggle" type="button" style="background: #dc2626; color: #ffffff; border: none; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">
         <i class="fa-solid fa-microphone-slash"></i> Mic Off
       </button>
-      <button id="btnCamToggle" type="button" style="background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
+      <button id="btnCamToggle" type="button" style="background: #dc2626; color: #ffffff; border: none; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">
         <i class="fa-solid fa-video-slash"></i> Cam Off
       </button>
       <button id="btnRaiseHand" type="button" style="background: #f59e0b; color: #0f172a; border: none; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">
         <i class="fa-solid fa-hand"></i> Raise Hand
       </button>
-      <button id="btnLeaveCall" type="button" style="background: #dc2626; color: #ffffff; border: none; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">
+      <button id="btnLeaveCall" type="button" style="background: #7f1d1d; color: #fecaca; border: 1px solid #dc2626; border-radius: 10px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">
         <i class="fa-solid fa-phone-slash"></i> Leave Call
       </button>
     </footer>
@@ -170,6 +187,26 @@
       let activeTab = "messages";
       let unreadCount = 0;
       let latestRoster = [];
+      let isFullStretch = true;
+      let wakeLockSentinel = null;
+      let audioMonitorTimer = null;
+
+      // Keep Screen Awake on PC, Android, iPhone & iPad while in class
+      async function enableScreenWakeLock() {
+        try {
+          if ("wakeLock" in navigator) {
+            wakeLockSentinel = await navigator.wakeLock.request("screen");
+          }
+        } catch (e) {}
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          enableScreenWakeLock();
+          const v = document.getElementById("mainStageVideo");
+          if (v && v.srcObject && v.paused) v.play().catch(() => {});
+        }
+      });
 
       function escapeHtml(s) {
         return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -196,6 +233,50 @@
         clearTimeout(t._timer);
         t._timer = setTimeout(() => { t.style.display = "none"; }, 3500);
       }
+
+      // Make Host Round Camera Bubble Draggable via Touch & Mouse (works on iPhone/iPad/Android/PC)
+      (function initDraggableRoundHostBubble() {
+        const bubble = document.getElementById("hostRoundCamBubble");
+        if (!bubble) return;
+        let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+        bubble.addEventListener("pointerdown", (e) => {
+          e.preventDefault();
+          dragging = true;
+          bubble.style.cursor = "grabbing";
+          const rect = bubble.getBoundingClientRect();
+          const parentRect = bubble.parentElement.getBoundingClientRect();
+          origLeft = rect.left - parentRect.left;
+          origTop = rect.top - parentRect.top;
+          startX = e.clientX;
+          startY = e.clientY;
+          bubble.style.right = "auto";
+          bubble.style.bottom = "auto";
+          bubble.style.left = `${origLeft}px`;
+          bubble.style.top = `${origTop}px`;
+          try { bubble.setPointerCapture(e.pointerId); } catch (err) {}
+        });
+
+        bubble.addEventListener("pointermove", (e) => {
+          if (!dragging) return;
+          const parentRect = bubble.parentElement.getBoundingClientRect();
+          const maxLeft = Math.max(0, parentRect.width - bubble.offsetWidth);
+          const maxTop = Math.max(0, parentRect.height - bubble.offsetHeight);
+          const nextLeft = Math.max(0, Math.min(maxLeft, origLeft + (e.clientX - startX)));
+          const nextTop = Math.max(0, Math.min(maxTop, origTop + (e.clientY - startY)));
+          bubble.style.left = `${nextLeft}px`;
+          bubble.style.top = `${nextTop}px`;
+        });
+
+        const endDrag = (e) => {
+          if (!dragging) return;
+          dragging = false;
+          bubble.style.cursor = "grab";
+          try { bubble.releasePointerCapture(e.pointerId); } catch (err) {}
+        };
+        bubble.addEventListener("pointerup", endDrag);
+        bubble.addEventListener("pointercancel", endDrag);
+      })();
 
       function appendMessage(sender, text, isSelf, isSystem) {
         const list = document.getElementById("chatMessagesList");
@@ -225,12 +306,10 @@
         }
       }
 
-      // Render Students panel (Includes student's own video tile + all other participants)
       function renderStudentsPanel() {
         const panel = document.getElementById("panelStudents");
         panel.innerHTML = "";
 
-        // 1. Self tile inside right panel (never placed on main front stage)
         const selfCard = document.createElement("div");
         selfCard.style.cssText = "background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 8px; margin-bottom: 8px;";
         const selfInitials = getInitials(studentName);
@@ -239,7 +318,7 @@
 
         selfCard.innerHTML = `
           <div style="position: relative; width: 100%; height: 96px; border-radius: 9px; background: #0f172a; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-            <video id="sidebarSelfVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; display: ${hasSelfCam ? "block" : "none"};"></video>
+            <video id="sidebarSelfVideo" autoplay playsinline webkit-playsinline muted style="width: 100%; height: 100%; object-fit: cover; display: ${hasSelfCam ? "block" : "none"};"></video>
             <div style="display: ${hasSelfCam ? "none" : "flex"}; width: 46px; height: 46px; border-radius: 50%; background: ${selfBg}; color: #fff; font-size: 16px; font-weight: 800; align-items: center; justify-content: center;">
               ${escapeHtml(selfInitials)}
             </div>
@@ -261,7 +340,6 @@
           }
         }
 
-        // 2. Host & Other Participants
         latestRoster.forEach((p) => {
           if (peer && p.id === peer.id) return;
           const row = document.createElement("div");
@@ -278,40 +356,78 @@
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 6px; font-size: 11px;">
-              <span style="color: ${p.micOn ? "#22c55e" : "#64748b"};"><i class="fa-solid ${p.micOn ? "fa-microphone" : "fa-microphone-slash"}"></i></span>
-              <span style="color: ${p.camOn ? "#22c55e" : "#64748b"};"><i class="fa-solid ${p.camOn ? "fa-video" : "fa-video-slash"}"></i></span>
+              <span style="color: ${p.micOn ? "#22c55e" : "#ef4444"};"><i class="fa-solid ${p.micOn ? "fa-microphone" : "fa-microphone-slash"}"></i></span>
+              <span style="color: ${p.camOn ? "#22c55e" : "#ef4444"};"><i class="fa-solid ${p.camOn ? "fa-video" : "fa-video-slash"}"></i></span>
             </div>
           `;
           panel.appendChild(row);
         });
       }
 
+      // Red when Off/Locked, Green when Active/On
       function updateMediaButtonsUI() {
         const micBtn = document.getElementById("btnMicToggle");
         const camBtn = document.getElementById("btnCamToggle");
 
         if (micLockedByHost) {
           micBtn.innerHTML = `<i class="fa-solid fa-lock"></i> Mic Disabled`;
-          micBtn.style.background = "#450a0a";
-          micBtn.style.color = "#fca5a5";
+          micBtn.style.background = "#991b1b";
+          micBtn.style.color = "#fecaca";
         } else {
-          micBtn.style.color = "#f8fafc";
-          micBtn.style.background = micOn ? "#16a34a" : "#1e293b";
+          micBtn.style.color = "#ffffff";
+          micBtn.style.background = micOn ? "#16a34a" : "#dc2626";
           micBtn.innerHTML = micOn ? `<i class="fa-solid fa-microphone"></i> Mic On` : `<i class="fa-solid fa-microphone-slash"></i> Mic Off`;
         }
 
         if (camLockedByHost) {
           camBtn.innerHTML = `<i class="fa-solid fa-lock"></i> Cam Disabled`;
-          camBtn.style.background = "#450a0a";
-          camBtn.style.color = "#fca5a5";
+          camBtn.style.background = "#991b1b";
+          camBtn.style.color = "#fecaca";
         } else {
-          camBtn.style.color = "#f8fafc";
-          camBtn.style.background = camOn ? "#16a34a" : "#1e293b";
+          camBtn.style.color = "#ffffff";
+          camBtn.style.background = camOn ? "#16a34a" : "#dc2626";
           camBtn.innerHTML = camOn ? `<i class="fa-solid fa-video"></i> Cam On` : `<i class="fa-solid fa-video-slash"></i> Cam Off`;
         }
       }
 
+      function stopAudioLevelMonitor() {
+        if (audioMonitorTimer) {
+          clearInterval(audioMonitorTimer);
+          audioMonitorTimer = null;
+        }
+      }
+
+      function startAudioLevelMonitor(stream) {
+        stopAudioLevelMonitor();
+        if (!stream || !stream.getAudioTracks().length) return;
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          const ctx = new AudioCtx();
+          const src = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 256;
+          src.connect(analyser);
+          const buf = new Uint8Array(analyser.frequencyBinCount);
+          let wasSpeaking = false;
+
+          audioMonitorTimer = setInterval(() => {
+            if (!micOn || !hostConn || !hostConn.open) return;
+            analyser.getByteFrequencyData(buf);
+            let sum = 0;
+            for (let i = 0; i < buf.length; i++) sum += buf[i];
+            const avg = sum / buf.length;
+            const isSpeaking = avg > 18;
+            if (isSpeaking && !wasSpeaking) {
+              hostConn.send({ type: "student-speaking", speaking: true });
+            }
+            wasSpeaking = isSpeaking;
+          }, 450);
+        } catch (e) {}
+      }
+
       async function syncOwnMedia() {
+        stopAudioLevelMonitor();
         if (!micOn && !camOn) {
           if (localStream) {
             localStream.getTracks().forEach((t) => t.stop());
@@ -325,6 +441,7 @@
           try {
             if (localStream) localStream.getTracks().forEach((t) => t.stop());
             localStream = await navigator.mediaDevices.getUserMedia({ audio: micOn, video: camOn });
+            if (micOn) startAudioLevelMonitor(localStream);
             if (peer && localStream) {
               if (outgoingCall) { try { outgoingCall.close(); } catch (e) {} }
               outgoingCall = peer.call(roomId, localStream);
@@ -344,6 +461,11 @@
       }
 
       function disconnectAndExit(reasonTitle, reasonMsg) {
+        stopAudioLevelMonitor();
+        if (wakeLockSentinel) {
+          try { wakeLockSentinel.release(); } catch (e) {}
+          wakeLockSentinel = null;
+        }
         if (localStream) {
           localStream.getTracks().forEach((t) => t.stop());
           localStream = null;
@@ -353,7 +475,7 @@
         if (peer) { try { peer.destroy(); } catch (e) {} }
 
         document.body.innerHTML = `
-          <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #020617; color: #f8fafc; text-align: center; padding: 24px;">
+          <div style="height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #020617; color: #f8fafc; text-align: center; padding: 24px;">
             <div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: #f87171; display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 14px;">
               <i class="fa-solid fa-phone-slash"></i>
             </div>
@@ -465,6 +587,29 @@
         peer.on("call", (call) => {
           call.answer();
           call.on("stream", (remoteStream) => {
+            const isRoundCam = call.metadata && call.metadata.streamRole === "host-round-cam";
+            if (isRoundCam) {
+              const bubble = document.getElementById("hostRoundCamBubble");
+              const camVid = document.getElementById("hostRoundCamVideo");
+              if (remoteStream && remoteStream.getVideoTracks().length > 0) {
+                bubble.style.display = "block";
+                camVid.srcObject = remoteStream;
+                camVid.play().catch(() => {});
+              } else {
+                bubble.style.display = "none";
+              }
+              remoteStream.getVideoTracks().forEach((t) => {
+                t.onended = () => { bubble.style.display = "none"; };
+              });
+              return;
+            }
+
+            // Main Stage Stream (Shared Screen or Host Camera)
+            const bubble = document.getElementById("hostRoundCamBubble");
+            if (!call.metadata || call.metadata.streamRole !== "screen-share") {
+              if (bubble) bubble.style.display = "none";
+            }
+
             const vid = document.getElementById("mainStageVideo");
             const wait = document.getElementById("stageWaitingBox");
             if (remoteStream && remoteStream.getVideoTracks().length > 0) {
@@ -480,6 +625,7 @@
       const startJoin = () => {
         studentName = (nameInput.value || "").trim() || "Student";
         joinGate.style.display = "none";
+        enableScreenWakeLock();
         connectToClassroom();
       };
       btnJoin.onclick = startJoin;
@@ -512,6 +658,17 @@
 
       document.getElementById("btnLeaveCall").onclick = () => {
         disconnectAndExit("You Left the Classroom", "You have disconnected from the live session.");
+      };
+
+      // Toggle Full Area Fill vs Aspect Fit (Eliminates black bars on PC & Mobile)
+      const fitBtn = document.getElementById("btnFitFillToggle");
+      fitBtn.onclick = () => {
+        isFullStretch = !isFullStretch;
+        const vid = document.getElementById("mainStageVideo");
+        if (vid) vid.style.objectFit = isFullStretch ? "fill" : "contain";
+        fitBtn.innerHTML = isFullStretch
+          ? `<i class="fa-solid fa-up-right-and-down-left-from-center"></i> Full Area`
+          : `<i class="fa-solid fa-compress"></i> Aspect Fit`;
       };
 
       const sidebar = document.getElementById("rightSidebar");
@@ -570,11 +727,24 @@
       document.getElementById("btnSendChat").onclick = sendChat;
       chatInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
 
+      // Cross-Platform Fullscreen (PC, Android, iPhone & iPad Safari)
       document.getElementById("btnFullscreen").onclick = () => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+        const root = document.documentElement;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (root.requestFullscreen) {
+            root.requestFullscreen().catch(() => {});
+          } else if (root.webkitRequestFullscreen) {
+            root.webkitRequestFullscreen();
+          } else {
+            window.scrollTo(0, 1);
+            showToast("Tip: Tap Share → Add to Home Screen on iPhone/iPad for full-screen mode.");
+          }
         } else {
-          document.exitFullscreen().catch(() => {});
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
         }
       };
     })();
