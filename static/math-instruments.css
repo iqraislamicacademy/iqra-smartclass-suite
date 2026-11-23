@@ -895,3 +895,123 @@
 .construction-ghost-point {
   pointer-events: none;
 }
+/* ==========================================================================
+   MOBILE LANDSCAPE FINAL FIT: 2-COLUMN LAYOUT (PC STYLE) + DOCK GAP
+   ========================================================================== */
+@media screen and (orientation: landscape) and (max-height: 540px) {
+  /* 1. Floating Dock ko poori tarah 360px height ke andar fit karna */
+  aside#floatingDock.floating-dock,
+  aside#floatingDock,
+  aside.dock-panel,
+  #rightDock {
+    position: fixed !important;
+    top: 50% !important;
+    bottom: auto !important;
+    right: 6px !important;
+    transform: translateY(-50%) scale(0.55) !important;
+    transform-origin: right center !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+  }
+
+  #floatingDock .dock-full-panel {
+    margin-top: 0 !important;
+    max-height: none !important;
+  }
+
+  #dockToolsList,
+  .dock-tools-list {
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* 2. Math Box ko Dock se saaf fasle par (84px) aur 2-column PC style me rakhna */
+  #mathFlyoutBox,
+  .math-flyout-box {
+    position: fixed !important;
+    top: 50% !important;
+    bottom: auto !important;
+    right: 84px !important;
+    left: auto !important;
+    transform: translateY(-50%) !important;
+    width: 220px !important;
+    min-width: 220px !important;
+    max-width: calc(100vw - 96px) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - 12px) !important;
+    padding: 8px 10px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  #mathFlyoutBox .math-flyout-header,
+  .math-flyout-box .math-flyout-header {
+    margin-bottom: 4px !important;
+    padding-bottom: 4px !important;
+    font-size: 11.5px !important;
+  }
+
+  #mathFlyoutBox .math-section-title,
+  .math-flyout-box .math-section-title {
+    margin: 5px 0 3px !important;
+    font-size: 9px !important;
+  }
+
+  /* Har row me 2 buttons (Original PC Layout) */
+  #mathFlyoutBox .math-tools-grid,
+  .math-flyout-box .math-tools-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 4px !important;
+    padding: 0 !important;
+  }
+
+  #floatingDock #mathFlyoutBox .math-tools-grid .math-tool-btn,
+  #mathFlyoutBox .math-tools-grid .math-tool-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    padding: 3px 4px !important;
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    box-sizing: border-box !important;
+  }
+
+  #mathFlyoutBox .math-tools-grid .math-tool-btn i,
+  .math-flyout-box .math-tools-grid .math-tool-btn i {
+    font-size: 11px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+  }
+
+  #mathFlyoutBox .math-tools-grid .math-tool-btn span,
+  .math-flyout-box .math-tools-grid .math-tool-btn span {
+    font-size: 9px !important;
+    line-height: 1.05 !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    text-align: center !important;
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Sabse neeche wala Perpendicular (90°) poori 2-column width me akela rahega */
+  #btnGeomPerpendicular {
+    grid-column: span 2 !important;
+  }
+}
