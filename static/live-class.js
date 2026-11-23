@@ -1,13 +1,15 @@
 /* ==========================================================================
    IQRA ISLAMIC ACADEMY - HOST STUDIO & LIVE BROADCAST CONTROLLER
-   (Native Entire-Screen + System Audio Share on PC & Mobile/Tablet,
-    Movable/Minimizable Round Student Bubble on Host Stage, Zero-Lag Stream)
+   (Original Left-Wall Minimize Tab + Password Gate + YouTube-Style Share Modal
+    with Editable English Invitation Message & Custom Link ID)
    ========================================================================== */
 (function () {
   const ACADEMY_NAME = "Iqra Islamic Academy";
 
   let classPeer = null;
   let activeRoomSlug = "iqra-live";
+  let classPassword = "";
+  let classScheduleTime = "Today at 8:00 PM IST";
   let courseTitle = "Darse Nizami 1st Year";
   let teacherDisplayName = "Teacher";
   let teacherAvatarDataUrl = "";
@@ -96,6 +98,216 @@
     return cleaned.startsWith("iqra") ? cleaned : `iqra-${cleaned}`;
   }
 
+  function generateRandomPassword() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
+
+function buildDefaultEnglishInvite(roomSlug, passValue, timeText) {
+    const link = getStudentClassUrl(roomSlug);
+    const lines = [
+      `Salam Dear Students !`,
+      ``,
+      `You are requested to join the online class using the invitation link provided below.`,
+      ``,
+      `Please click on the link to join the class and make sure to join on time. Kindly keep the link safe for future use and do not share it with anyone outside the class.`,
+      ``,
+      `Your regular attendance and active participation are highly appreciated.`,
+      ``,
+      `Class / Subject: ${courseTitle}`,
+      `Teacher: ${teacherDisplayName}`,
+      `Schedule: ${timeText || classScheduleTime}`,
+      ``,
+      `Class Invitation Link:`,
+      `${link}`
+    ];
+    if (passValue) {
+      lines.push(`Classroom Password: ${passValue}`);
+    }
+    lines.push(``, `Thank you!`);
+    return lines.join("\n");
+  }
+
+  // YouTube-Style Share Modal with Editable English Invitation & Custom Link ID
+  function openYouTubeStyleShareModal(roomSlug, passValue) {
+    const existing = document.getElementById("iqraYtShareModal");
+    if (existing) existing.remove();
+
+    let currentSlug = sanitizeRoomSlug(roomSlug);
+    let currentLink = getStudentClassUrl(currentSlug);
+    const initialInvite = buildDefaultEnglishInvite(currentSlug, passValue, classScheduleTime);
+
+    const overlay = document.createElement("div");
+    overlay.id = "iqraYtShareModal";
+    overlay.style.cssText = `
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(4px); z-index: 999998;
+      display: flex; align-items: center; justify-content: center;
+      font-family: system-ui, -apple-system, sans-serif; padding: 14px;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background: #ffffff; width: 460px; max-width: 96vw; max-height: 92vh; overflow-y: auto; border-radius: 18px; padding: 20px; box-shadow: 0 24px 48px rgba(0,0,0,0.3); position: relative;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <h4 style="margin: 0; font-size: 16px; font-weight: 800; color: #0f172a;">Share Classroom Invitation</h4>
+          <button id="btnCloseYtShare" type="button" style="width: 30px; height: 30px; border-radius: 50%; border: none; background: #f1f5f9; color: #475569; font-size: 15px; cursor: pointer;">✕</button>
+        </div>
+
+        <!-- Customize Classroom Link ID -->
+        <div style="margin-bottom: 10px;">
+          <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 3px;">Customize Classroom Link ID</label>
+          <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 9px; padding: 5px 9px;">
+            <span style="font-size: 11px; color: #64748b;">?room=</span>
+            <input id="ytShareCustomSlugInput" type="text" value="${escapeHtml(currentSlug)}" style="flex: 1; min-width: 0; border: none; background: transparent; font-size: 12.5px; font-weight: 700; color: #0284c7; outline: none;" />
+          </div>
+        </div>
+
+        <!-- Editable English Invitation Message -->
+        <div style="margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+            <label style="font-size: 11px; font-weight: 700; color: #334155;">Invitation Message (Editable)</label>
+            <button id="btnResetInviteMsg" type="button" style="background: transparent; border: none; color: #0284c7; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0;">
+              <i class="fa-solid fa-rotate-left"></i> Reset Text
+            </button>
+          </div>
+          <textarea id="ytShareInviteTextarea" rows="7" style="
+            width: 100%; box-sizing: border-box; padding: 9px 11px;
+            border: 1.5px solid #cbd5e1; border-radius: 11px;
+            font-size: 12px; line-height: 1.45; color: #0f172a;
+            background: #f8fafc; resize: vertical; outline: none;
+          ">${escapeHtml(initialInvite)}</textarea>
+        </div>
+
+        <!-- YouTube-Style Horizontal Social Media Icons -->
+        <div id="ytSocialIconsRow" style="display: flex; align-items: flex-start; gap: 12px; overflow-x: auto; padding: 4px 2px 12px; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0;"></div>
+
+        <!-- Bottom Copy Link & Copy Full Invite Bar -->
+        <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 6px 8px 6px 10px;">
+          <input id="ytShareLinkField" type="text" readonly value="${escapeHtml(currentLink)}" style="
+            flex: 1; min-width: 0; border: none; background: transparent;
+            font-size: 11.5px; color: #0f172a; font-family: monospace; outline: none;
+          " />
+          <button id="btnCopyLinkOnly" type="button" style="
+            background: #e2e8f0; color: #0f172a; border: none; border-radius: 18px;
+            padding: 6px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+          ">Copy Link</button>
+          <button id="btnCopyYtShareLink" type="button" style="
+            background: #0284c7; color: #ffffff; border: none; border-radius: 18px;
+            padding: 6px 13px; font-size: 11.5px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+          ">Copy Invite</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const slugInput = document.getElementById("ytShareCustomSlugInput");
+    const inviteTextarea = document.getElementById("ytShareInviteTextarea");
+    const linkField = document.getElementById("ytShareLinkField");
+    const socialRow = document.getElementById("ytSocialIconsRow");
+
+    function renderSocialIcons() {
+      const msgText = inviteTextarea.value;
+      const encodedFullText = encodeURIComponent(msgText);
+      const encodedUrl = encodeURIComponent(currentLink);
+      const encodedSubject = encodeURIComponent(`${ACADEMY_NAME}: ${courseTitle} — Live Class Invitation`);
+
+      const socials = [
+        { label: "WhatsApp", bg: "#25D366", icon: "fa-brands fa-whatsapp", href: `https://api.whatsapp.com/send?text=${encodedFullText}` },
+        { label: "Telegram", bg: "#0088cc", icon: "fa-brands fa-telegram", href: `https://t.me/share/url?url=${encodedUrl}&text=${encodedFullText}` },
+        { label: "Facebook", bg: "#1877F2", icon: "fa-brands fa-facebook-f", href: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}` },
+        { label: "X", bg: "#0f172a", icon: "fa-brands fa-x-twitter", href: `https://twitter.com/intent/tweet?text=${encodedFullText}` },
+        { label: "Email", bg: "#ea580c", icon: "fa-solid fa-envelope", href: `mailto:?subject=${encodedSubject}&body=${encodedFullText}` },
+        { label: "Messages", bg: "#16a34a", icon: "fa-solid fa-comment-sms", href: `sms:?body=${encodedFullText}` }
+      ];
+
+      const nativeHtml =
+        typeof navigator.share === "function"
+          ? `<button id="btnNativeDeviceShare" type="button" style="display: flex; flex-direction: column; align-items: center; gap: 6px; background: transparent; border: none; padding: 0; min-width: 62px; cursor: pointer;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: #0284c7; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 19px; box-shadow: 0 4px 12px rgba(2,132,199,0.28);">
+                <i class="fa-solid fa-share-nodes"></i>
+              </div>
+              <span style="font-size: 11px; font-weight: 600; color: #334155;">More Apps</span>
+            </button>`
+          : "";
+
+      socialRow.innerHTML =
+        nativeHtml +
+        socials
+          .map(
+            (s) => `
+            <a href="${s.href}" target="_blank" rel="noopener noreferrer" style="display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; color: #1e293b; min-width: 62px; cursor: pointer;">
+              <div style="width: 48px; height: 48px; border-radius: 50%; background: ${s.bg}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.16);">
+                <i class="${s.icon}"></i>
+              </div>
+              <span style="font-size: 11px; font-weight: 600; color: #334155;">${s.label}</span>
+            </a>
+          `
+          )
+          .join("");
+
+      const nativeBtn = document.getElementById("btnNativeDeviceShare");
+      if (nativeBtn) {
+        nativeBtn.onclick = async () => {
+          try {
+            await navigator.share({
+              title: `${ACADEMY_NAME} — ${courseTitle}`,
+              text: inviteTextarea.value,
+              url: currentLink
+            });
+          } catch (err) {}
+        };
+      }
+    }
+
+    renderSocialIcons();
+
+    slugInput.addEventListener("input", () => {
+      const oldLink = currentLink;
+      const oldSlug = currentSlug;
+      currentSlug = sanitizeRoomSlug(slugInput.value);
+      currentLink = getStudentClassUrl(currentSlug);
+      linkField.value = currentLink;
+
+      const lobbyRoomInput = document.getElementById("iqraCustomRoomInput");
+      if (lobbyRoomInput) lobbyRoomInput.value = currentSlug;
+      const lobbyPreview = document.getElementById("iqraInvitePreviewText");
+      if (lobbyPreview) lobbyPreview.textContent = currentLink;
+
+      inviteTextarea.value = inviteTextarea.value
+        .replace(oldLink, currentLink)
+        .replace(`Classroom ID: ${oldSlug}`, `Classroom ID: ${currentSlug}`);
+      renderSocialIcons();
+    });
+
+    inviteTextarea.addEventListener("input", renderSocialIcons);
+
+    document.getElementById("btnResetInviteMsg").onclick = () => {
+      inviteTextarea.value = buildDefaultEnglishInvite(currentSlug, passValue, classScheduleTime);
+      renderSocialIcons();
+    };
+
+    document.getElementById("btnCloseYtShare").onclick = () => overlay.remove();
+    overlay.onclick = (e) => {
+      if (e.target === overlay) overlay.remove();
+    };
+
+    document.getElementById("btnCopyLinkOnly").onclick = () => {
+      navigator.clipboard.writeText(currentLink).then(() => {
+        showLiveToast("Student classroom link copied.");
+      });
+    };
+
+    document.getElementById("btnCopyYtShareLink").onclick = () => {
+      navigator.clipboard.writeText(inviteTextarea.value).then(() => {
+        const btn = document.getElementById("btnCopyYtShareLink");
+        if (btn) {
+          btn.textContent = "Copied!";
+          btn.style.background = "#16a34a";
+        }
+        showLiveToast("Full English invitation copied.");
+      });
+    };
+  }
   function escapeHtml(str) {
     return String(str || "")
       .replace(/&/g, "&amp;")
@@ -273,9 +485,10 @@
     };
 
     renderBoardFrame();
-    canvasBroadcastTimer = setInterval(renderBoardFrame, 125); // Smooth 8 FPS with zero lag
+    canvasBroadcastTimer = setInterval(renderBoardFrame, 125);
     return composite.captureStream(8);
   }
+
   function stopBoardSharingStreams() {
     if (canvasBroadcastTimer) {
       clearInterval(canvasBroadcastTimer);
@@ -448,7 +661,6 @@
     });
   }
 
-  // Host's Round Student Bubble (Always visible when a student is connected, movable & minimizable)
   function updateHostRoundStudentBubble() {
     const bubble = document.getElementById("iqraHostRoundStudentBubble");
     const vid = document.getElementById("iqraHostRoundStudentVid");
@@ -647,7 +859,7 @@
       empty.style.cssText = "text-align: center; color: #64748b; font-size: 12px; padding: 22px 10px;";
       empty.innerHTML = `
         <i class="fa-solid fa-users" style="font-size: 20px; margin-bottom: 6px; display: block; color: #334155;"></i>
-        No students have joined yet. Share the classroom link to begin.
+        No students have joined yet. Share the classroom invite to begin.
       `;
       listEl.appendChild(empty);
       return;
@@ -1051,6 +1263,7 @@
     if (wallTab) wallTab.remove();
   }
 
+  // Original Left-Wall Vertical-Draggable Minimize Pill (Image 4)
   function toggleLeftWallMinimize(minimize) {
     const panel = document.getElementById("iqraLiveClassPanel");
     if (!panel) return;
@@ -1153,6 +1366,8 @@
     const existing = document.getElementById("iqraLiveLobbyModal");
     if (existing) existing.remove();
 
+    const defaultPass = classPassword || generateRandomPassword();
+
     const modal = document.createElement("div");
     modal.id = "iqraLiveLobbyModal";
     modal.style.cssText = `
@@ -1163,58 +1378,80 @@
     `;
 
     modal.innerHTML = `
-      <div style="background: #ffffff; width: 420px; max-width: 94vw; border-radius: 18px; padding: 22px; box-shadow: 0 24px 48px rgba(0,0,0,0.28); position: relative;">
+      <div style="background: #ffffff; width: 440px; max-width: 95vw; max-height: 94vh; overflow-y: auto; border-radius: 18px; padding: 20px; box-shadow: 0 24px 48px rgba(0,0,0,0.28); position: relative;">
         <button id="closeLiveLobbyModal" type="button" style="position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 50%; border: none; background: #f1f5f9; color: #475569; font-size: 15px; cursor: pointer;">✕</button>
 
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
-          <div style="width: 44px; height: 44px; border-radius: 12px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 19px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <div style="width: 42px; height: 42px; border-radius: 12px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 18px;">
             <i class="fa-solid fa-mosque"></i>
           </div>
           <div>
-            <h3 style="margin: 0; font-size: 17px; font-weight: 800; color: #0f172a;">${ACADEMY_NAME}</h3>
-            <p style="margin: 2px 0 0; font-size: 12px; color: #64748b;">Configure Classroom & Start Hosting</p>
+            <h3 style="margin: 0; font-size: 16.5px; font-weight: 800; color: #0f172a;">${ACADEMY_NAME}</h3>
+            <p style="margin: 2px 0 0; font-size: 11.5px; color: #64748b;">Configure Password-Protected Classroom & Invite</p>
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 9px;">
           <div>
-            <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 4px;">Teacher Name</label>
+            <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 3px;">Teacher Name</label>
             <input id="iqraHostNameInput" type="text" value="${escapeHtml(teacherDisplayName)}" placeholder="Teacher Name"
               style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 12.5px; color: #0f172a; outline: none;" />
           </div>
           <div>
-            <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 4px;">Profile Photo</label>
+            <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 3px;">Profile Photo</label>
             <input id="iqraLobbyAvatarInput" type="file" accept="image/*" style="width: 100%; font-size: 11px; padding-top: 5px; color: #475569;" />
           </div>
         </div>
 
-        <div style="margin-bottom: 10px;">
-          <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 4px;">Course / Class Title (Shown to Students)</label>
-          <input id="iqraCourseTitleInput" type="text" value="${escapeHtml(courseTitle)}" placeholder="e.g. Darse Nizami 1st Year"
-            style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 13px; font-weight: 600; color: #0f172a; outline: none;" />
-        </div>
-
-        <div style="margin-bottom: 10px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-            <label style="font-size: 11px; font-weight: 700; color: #334155;">Classroom Link ID (Keep same or generate new)</label>
-            <button id="btnGenerateNewRoomSlug" type="button" style="background: #e0f2fe; color: #0369a1; border: none; border-radius: 6px; padding: 2px 8px; font-size: 10.5px; font-weight: 700; cursor: pointer;">
-              New Link ID
-            </button>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 9px;">
+          <div>
+            <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 3px;">Course / Class Title</label>
+            <input id="iqraCourseTitleInput" type="text" value="${escapeHtml(courseTitle)}" placeholder="e.g. Darse Nizami 1st Year"
+              style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0f172a; outline: none;" />
           </div>
-          <input id="iqraCustomRoomInput" type="text" value="${escapeHtml(activeRoomSlug)}" placeholder="e.g. iqra-darse-nizami"
-            style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0284c7; outline: none;" />
+          <div>
+            <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 3px;">Class Schedule / Time</label>
+            <input id="iqraClassTimeInput" type="text" value="${escapeHtml(classScheduleTime)}" placeholder="e.g. Today at 8:00 PM IST"
+              style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 12.5px; color: #0f172a; outline: none;" />
+          </div>
         </div>
 
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px; margin-bottom: 15px;">
-          <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 3px;">Student Invite Link (Secure Classroom Only)</div>
+        <div style="display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 9px; margin-bottom: 9px;">
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+              <label style="font-size: 11px; font-weight: 700; color: #334155;">Customize Link ID</label>
+              <button id="btnGenerateNewRoomSlug" type="button" style="background: #e0f2fe; color: #0369a1; border: none; border-radius: 6px; padding: 1px 7px; font-size: 10px; font-weight: 700; cursor: pointer;">
+                New ID
+              </button>
+            </div>
+            <input id="iqraCustomRoomInput" type="text" value="${escapeHtml(activeRoomSlug)}" placeholder="e.g. iqra-darse-nizami"
+              style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #0284c7; outline: none;" />
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 3px;">
+              <i class="fa-solid fa-lock" style="color: #0284c7;"></i> Class Password
+            </label>
+            <div style="display: flex; gap: 4px;">
+              <input id="iqraClassPassInput" type="text" value="${escapeHtml(defaultPass)}" placeholder="Password"
+                style="width: 100%; box-sizing: border-box; padding: 8px 8px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 12.5px; font-weight: 700; color: #0f172a; outline: none;" />
+              <button id="btnRegenClassPass" type="button" title="Generate Password" style="padding: 0 8px; border: 1px solid #cbd5e1; background: #f1f5f9; border-radius: 9px; color: #334155; cursor: pointer;">
+                <i class="fa-solid fa-rotate"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; margin-bottom: 14px;">
+          <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 2px;">Custom Student Invite Link</div>
           <div id="iqraInvitePreviewText" style="font-size: 11px; color: #0f172a; word-break: break-all; font-family: monospace;">
             ${escapeHtml(getStudentClassUrl(activeRoomSlug))}
           </div>
         </div>
 
-        <div style="display: flex; gap: 10px;">
-          <button id="btnCopyLobbyLink" type="button" style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #cbd5e1; background: #ffffff; color: #1e293b; font-size: 13px; font-weight: 600; cursor: pointer;">
-            Copy Link
+        <div style="display: flex; gap: 9px;">
+          <button id="btnShareLobbyInvite" type="button" style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #0284c7; background: #eff6ff; color: #0369a1; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <i class="fa-solid fa-share-nodes"></i> Share & Edit
           </button>
           <button id="btnStartHostingNow" type="button" style="flex: 1.4; padding: 10px 14px; border-radius: 10px; border: none; background: #16a34a; color: #ffffff; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
             <i class="fa-solid fa-play"></i> Start Hosting
@@ -1226,8 +1463,10 @@
     document.body.appendChild(modal);
 
     const roomInput = document.getElementById("iqraCustomRoomInput");
+    const passInput = document.getElementById("iqraClassPassInput");
     const nameInput = document.getElementById("iqraHostNameInput");
     const titleInput = document.getElementById("iqraCourseTitleInput");
+    const timeInput = document.getElementById("iqraClassTimeInput");
     const previewEl = document.getElementById("iqraInvitePreviewText");
     const avatarInput = document.getElementById("iqraLobbyAvatarInput");
 
@@ -1251,18 +1490,33 @@
       previewEl.textContent = getStudentClassUrl(roomInput.value);
     };
 
+    document.getElementById("btnRegenClassPass").onclick = () => {
+      passInput.value = generateRandomPassword();
+    };
+
     document.getElementById("closeLiveLobbyModal").onclick = () => modal.remove();
 
-    document.getElementById("btnCopyLobbyLink").onclick = () => {
-      navigator.clipboard.writeText(getStudentClassUrl(sanitizeRoomSlug(roomInput.value))).then(() => {
-        showLiveToast("Student classroom link copied.");
-      });
+    document.getElementById("btnShareLobbyInvite").onclick = () => {
+      const slug = sanitizeRoomSlug(roomInput.value);
+      const passVal = String(passInput.value || "").trim();
+      teacherDisplayName = (nameInput.value || "").trim() || "Teacher";
+      courseTitle = (titleInput.value || "").trim() || "Live Session";
+      classScheduleTime = (timeInput.value || "").trim() || "Today at 8:00 PM IST";
+      openYouTubeStyleShareModal(slug, passVal);
     };
 
     document.getElementById("btnStartHostingNow").onclick = () => {
+      const passVal = String(passInput.value || "").trim();
+      if (!passVal) {
+        showLiveToast("Please enter a Class Password so unauthorized users cannot join.");
+        passInput.focus();
+        return;
+      }
       activeRoomSlug = sanitizeRoomSlug(roomInput.value);
+      classPassword = passVal;
       teacherDisplayName = (nameInput.value || "").trim() || "Teacher";
       courseTitle = (titleInput.value || "").trim() || "Live Session";
+      classScheduleTime = (timeInput.value || "").trim() || "Today at 8:00 PM IST";
       modal.remove();
       launchTeacherBroadcastPanel();
     };
@@ -1272,7 +1526,6 @@
     isHostingActive = true;
     enableHostWakeLock();
 
-    const inviteLink = getStudentClassUrl(activeRoomSlug);
     const hostInitials = getInitials(teacherDisplayName);
 
     const container = document.createElement("div");
@@ -1324,10 +1577,11 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 5px; flex-shrink: 0;">
-          <button id="btnCopyClassLink" type="button" title="Copy Student Classroom Link" style="
+          <button id="btnShareClassFromHeader" type="button" title="Share Classroom Invitation" style="
             background: #0284c7; color: #fff; border: none; border-radius: 7px;
             padding: 4px 9px; font-size: 11px; font-weight: 600; cursor: pointer;
-          ">Copy Link</button>
+            display: inline-flex; align-items: center; gap: 4px;
+          "><i class="fa-solid fa-share-nodes"></i> Share</button>
 
           <button id="btnToggleHostSidePanel" type="button" title="Show/Hide Students & Messages" style="
             background: #334155; color: #fff; border: none; border-radius: 7px;
@@ -1436,7 +1690,7 @@
       classPeer = new Peer(activeRoomSlug);
 
       classPeer.on("open", () => {
-        appendChatMessage("System", `${ACADEMY_NAME} — "${courseTitle}" is live.`, false, true);
+        appendChatMessage("System", `${ACADEMY_NAME} — "${courseTitle}" is live (Password Protected).`, false, true);
         showLiveToast(`Hosting started: ${courseTitle}`);
       });
 
@@ -1449,6 +1703,11 @@
       });
 
       classPeer.on("call", (incomingCall) => {
+        // Reject media call if peer has not passed password gate
+        if (!connectedStudents.has(incomingCall.peer)) {
+          try { incomingCall.close(); } catch (e) {}
+          return;
+        }
         incomingCall.answer();
         incomingCall.on("stream", (studentStream) => {
           const entry = connectedStudents.get(incomingCall.peer);
@@ -1461,89 +1720,102 @@
       });
 
       classPeer.on("connection", (conn) => {
-        conn.on("open", () => {
-          connectedStudents.set(conn.peer, {
-            conn,
-            mediaCall: null,
-            roundCamCall: null,
-            incomingStream: null,
-            name: "Student",
-            micOn: false,
-            camOn: false,
-            micLocked: false,
-            camLocked: false
-          });
-          updateStudentCountBadge();
-          renderHostParticipantsList();
-          refreshHostStagePreview();
-
-          conn.send({
-            type: "class-meta",
-            academyName: ACADEMY_NAME,
-            courseTitle,
-            teacherName: teacherDisplayName,
-            teacherAvatar: teacherAvatarDataUrl
-          });
-          conn.send({ type: "chat-history", history: chatHistory.slice(-30) });
-          syncRosterToAllStudents();
-
-          const stream = getActiveBroadcastStream();
-          const sharing = isScreenSharingActive();
-          const hasActiveVideo = Boolean(stream && stream.getVideoTracks().length > 0);
-          conn.send({ type: "host-stage-state", hasActiveVideo, teacherName: teacherDisplayName });
-
-          if (stream) {
-            const call = classPeer.call(conn.peer, stream, {
-              metadata: { streamRole: sharing ? "screen-share" : "host-cam" }
-            });
-            const entry = connectedStudents.get(conn.peer);
-            if (entry) entry.mediaCall = call;
-          }
-          if (sharing && !isCamOff && processedVideoStream && processedVideoStream.getVideoTracks().length > 0) {
-            const rCall = classPeer.call(conn.peer, processedVideoStream, {
-              metadata: { streamRole: "host-round-cam" }
-            });
-            const entry = connectedStudents.get(conn.peer);
-            if (entry) entry.roundCamCall = rCall;
-          }
-        });
-
         conn.on("data", (data) => {
           if (!data) return;
-          const entry = connectedStudents.get(conn.peer);
 
+          // Password verification gate before allowing entry
           if (data.type === "student-hello") {
-            const sName = (data.name || "Student").trim();
-            if (entry) {
-              entry.name = sName;
-              entry.micOn = Boolean(data.micOn);
-              entry.camOn = Boolean(data.camOn);
+            const incomingPass = String(data.password || "").trim();
+            if (classPassword && incomingPass !== classPassword) {
+              try {
+                conn.send({
+                  type: "auth-rejected",
+                  reason: "Wrong classroom password. Access denied by teacher."
+                });
+              } catch (e) {}
+              setTimeout(() => {
+                try { conn.close(); } catch (e) {}
+              }, 250);
+              return;
             }
+
+            try {
+              conn.send({ type: "auth-accepted" });
+            } catch (e) {}
+
+            const sName = (data.name || "Student").trim();
+            connectedStudents.set(conn.peer, {
+              conn,
+              mediaCall: null,
+              roundCamCall: null,
+              incomingStream: null,
+              name: sName,
+              micOn: Boolean(data.micOn),
+              camOn: Boolean(data.camOn),
+              micLocked: false,
+              camLocked: false
+            });
+
+            updateStudentCountBadge();
             renderHostParticipantsList();
             refreshHostStagePreview();
             syncRosterToAllStudents();
+
+            conn.send({
+              type: "class-meta",
+              academyName: ACADEMY_NAME,
+              courseTitle,
+              teacherName: teacherDisplayName,
+              teacherAvatar: teacherAvatarDataUrl
+            });
+            conn.send({ type: "chat-history", history: chatHistory.slice(-30) });
+
+            const stream = getActiveBroadcastStream();
+            const sharing = isScreenSharingActive();
+            const hasActiveVideo = Boolean(stream && stream.getVideoTracks().length > 0);
+            conn.send({ type: "host-stage-state", hasActiveVideo, teacherName: teacherDisplayName });
+
+            if (stream) {
+              const call = classPeer.call(conn.peer, stream, {
+                metadata: { streamRole: sharing ? "screen-share" : "host-cam" }
+              });
+              const entry = connectedStudents.get(conn.peer);
+              if (entry) entry.mediaCall = call;
+            }
+            if (sharing && !isCamOff && processedVideoStream && processedVideoStream.getVideoTracks().length > 0) {
+              const rCall = classPeer.call(conn.peer, processedVideoStream, {
+                metadata: { streamRole: "host-round-cam" }
+              });
+              const entry = connectedStudents.get(conn.peer);
+              if (entry) entry.roundCamCall = rCall;
+            }
+
             appendChatMessage("System", `${sName} joined the class.`, false, true);
             broadcastToAllStudents({ type: "system-msg", text: `${sName} joined the class.` });
             showLiveToast(`${sName} joined the live class.`);
-          } else if (data.type === "student-media-state") {
-            if (entry) {
-              entry.micOn = Boolean(data.micOn);
-              entry.camOn = Boolean(data.camOn);
-              renderHostParticipantsList();
-              refreshHostStagePreview();
-              syncRosterToAllStudents();
-            }
+            return;
+          }
+
+          const entry = connectedStudents.get(conn.peer);
+          if (!entry) return;
+
+          if (data.type === "student-media-state") {
+            entry.micOn = Boolean(data.micOn);
+            entry.camOn = Boolean(data.camOn);
+            renderHostParticipantsList();
+            refreshHostStagePreview();
+            syncRosterToAllStudents();
           } else if (data.type === "student-speaking") {
-            if (data.speaking && entry) {
+            if (data.speaking) {
               activeSpeakingStudentId = conn.peer;
               updateHostRoundStudentBubble();
             }
           } else if (data.type === "chat-message") {
-            const sender = (entry && entry.name) || data.sender || "Student";
+            const sender = entry.name || data.sender || "Student";
             appendChatMessage(sender, data.text, false, false);
             broadcastToAllStudents({ type: "chat-message", sender, text: data.text });
           } else if (data.type === "raise-hand") {
-            const sender = (entry && entry.name) || data.studentName || "Student";
+            const sender = entry.name || data.studentName || "Student";
             appendChatMessage("System", `✋ ${sender} raised their hand.`, false, true);
             showLiveToast(`✋ ${sender} raised their hand!`);
           } else if (data.type === "request-stream") {
@@ -1553,7 +1825,8 @@
 
         conn.on("close", () => {
           const entry = connectedStudents.get(conn.peer);
-          const leftName = (entry && entry.name) || "Student";
+          if (!entry) return;
+          const leftName = entry.name || "Student";
           connectedStudents.delete(conn.peer);
           if (hostStageTargetId === conn.peer) hostStageTargetId = "auto";
           if (activeSpeakingStudentId === conn.peer) activeSpeakingStudentId = null;
@@ -1579,10 +1852,8 @@
 
     await acquireHostMedia(selectedMicId, selectedCamId);
 
-    document.getElementById("btnCopyClassLink").onclick = () => {
-      navigator.clipboard.writeText(inviteLink).then(() => {
-        showLiveToast("Student classroom link copied.");
-      });
+    document.getElementById("btnShareClassFromHeader").onclick = () => {
+      openYouTubeStyleShareModal(activeRoomSlug, classPassword);
     };
 
     document.getElementById("btnWallMinLiveClass").onclick = () => toggleLeftWallMinimize(true);
@@ -1703,7 +1974,6 @@
       syncRosterToAllStudents();
     };
 
-    // Share Screen: Triggers Android/Tablet & PC Native Screen/App/Tab Picker
     const shareBtn = document.getElementById("btnShareBoardScreen");
     shareBtn.onclick = async () => {
       if (isScreenSharingActive()) {
@@ -1726,7 +1996,6 @@
           captured = true;
         } catch (err1) {
           if (err1 && err1.name === "NotAllowedError") return;
-          // Retry with video-only if Android browser rejects audio:true in getDisplayMedia
           try {
             localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
             captured = true;
@@ -1756,7 +2025,6 @@
         }
       }
 
-      // Low-Lag Fallback only if device browser does not support getDisplayMedia at all
       canvasFallbackStream = createLowLagBoardCanvasStream();
       shareBtn.innerHTML = `<i class="fa-solid fa-stop"></i> Stop Share`;
       shareBtn.style.background = "#16a34a";
