@@ -1,8 +1,9 @@
 // ========================================================
 // IQRA SMARTCLASS SUITE - CINEMATIC WELCOME SPLASH SCREEN (welcome-splash.js)
-// v4.0 — Exact Selector & Cooldown Lock Edition:
-// 1. Targets exact `.iqra-globe-modal`, `#iqraMaps3DModal` / `.iqra-maps-modal`, and `#iqraSolar3DModal`
-// 2. Zero double-click bug on 3D Maps & Zero close-trigger bug on 3D Globe
+// Clean Edition:
+// 1. Synced with 2D Maps & Geography Explorer
+// 2. Proper z-index above map modal & clean instant dismiss
+// 3. Cooldown lock prevents accidental re-trigger spam
 // ========================================================
 (function (window) {
   "use strict";
@@ -41,8 +42,8 @@
       `,
     },
     maps: {
-      badge: "IQRA 3D MAPS",
-      title: "2D / 3D Maps & Geography Explorer",
+      badge: "IQRA 2D MAPS",
+      title: "2D Maps & Geography Explorer",
       subtitle: "Loading Political, Physical Terrain & Interactive Vector Layers...",
       accent: "#10b981",
       glow: "rgba(16, 185, 129, 0.38)",
@@ -108,7 +109,7 @@
       #iqraToolWelcomeSplash {
         position: fixed;
         inset: 0;
-        z-index: 250000;
+        z-index: 2147483646;
         background: radial-gradient(circle at center, #0f172a 0%, #020617 75%, #000000 100%);
         display: none;
         flex-direction: column;
@@ -117,7 +118,7 @@
         font-family: system-ui, -apple-system, sans-serif;
         color: #f8fafc;
         opacity: 0;
-        transition: opacity 0.28s ease;
+        transition: opacity 0.25s ease;
         overflow: hidden;
       }
       #iqraToolWelcomeSplash.visible {
@@ -150,10 +151,10 @@
         border: 1px solid rgba(148, 163, 184, 0.25);
         text-align: center;
         box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
-        animation: iqraSplashPop 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+        animation: iqraSplashPop 0.32s cubic-bezier(0.16, 1, 0.3, 1);
       }
       @keyframes iqraSplashPop {
-        from { transform: scale(0.93) translateY(12px); opacity: 0; }
+        from { transform: scale(0.94) translateY(10px); opacity: 0; }
         to { transform: scale(1) translateY(0); opacity: 1; }
       }
       .iqra-splash-icon-wrap {
@@ -168,7 +169,7 @@
       }
       @keyframes iqraSplashFloat {
         0%, 100% { transform: translateY(0px) scale(1); }
-        50% { transform: translateY(-6px) scale(1.04); }
+        50% { transform: translateY(-5px) scale(1.03); }
       }
       .iqra-splash-badge {
         display: inline-block;
@@ -246,13 +247,13 @@
         <div class="iqra-splash-icon-wrap" id="iqraSplashIcon"></div>
         <div class="iqra-splash-badge" id="iqraSplashBadge">IQRA SMARTCLASS SUITE</div>
         <h2 class="iqra-splash-title" id="iqraSplashTitle">Welcome</h2>
-        <p class="iqra-splash-sub" id="iqraSplashSub">Preparing interactive 3D workspace...</p>
+        <p class="iqra-splash-sub" id="iqraSplashSub">Preparing interactive workspace...</p>
         <div class="iqra-splash-bar-track">
           <div class="iqra-splash-bar-fill" id="iqraSplashBarFill"></div>
         </div>
         <button class="iqra-splash-skip-btn" id="btnDismissSplashNow">Enter Workspace ➔</button>
       </div>
-      <div class="iqra-splash-footer">IQRA SMARTCLASS SUITE • INTERACTIVE 3D ENGINE</div>
+      <div class="iqra-splash-footer">IQRA SMARTCLASS SUITE • INTERACTIVE LEARNING ENGINE</div>
     `;
     document.body.appendChild(el);
 
@@ -274,12 +275,12 @@
     fadeOutTimer = setTimeout(() => {
       el.classList.remove("visible", "fading-out");
       isSplashShowing = false;
-    }, 280);
+    }, 240);
   }
 
   function showWelcomeSplash(typeKey) {
     const now = Date.now();
-    if (toolState[typeKey] && now - toolState[typeKey].lastShownAt < 2000) {
+    if (toolState[typeKey] && now - toolState[typeKey].lastShownAt < 2500) {
       return;
     }
     if (toolState[typeKey]) toolState[typeKey].lastShownAt = now;
@@ -288,7 +289,7 @@
     if (fadeOutTimer) clearTimeout(fadeOutTimer);
 
     createSplashDOM();
-    const cfg = SPLASH_CONFIGS[typeKey] || SPLASH_CONFIGS.globe;
+    const cfg = SPLASH_CONFIGS[typeKey] || SPLASH_CONFIGS.maps;
     const el = document.getElementById("iqraToolWelcomeSplash");
     const card = document.getElementById("iqraSplashCard");
     const iconEl = document.getElementById("iqraSplashIcon");
@@ -316,12 +317,12 @@
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        fillEl.style.transition = "width 1.4s cubic-bezier(0.22, 1, 0.36, 1)";
+        fillEl.style.transition = "width 1.3s cubic-bezier(0.22, 1, 0.36, 1)";
         fillEl.style.width = "100%";
       });
     });
 
-    splashTimer = setTimeout(hideWelcomeSplash, 1600);
+    splashTimer = setTimeout(hideWelcomeSplash, 1500);
   }
 
   function syncModalStates() {
@@ -343,7 +344,7 @@
     if (!document.body) return;
     observer.observe(document.body, {
       childList: true,
-      subtree: true,
+      subtree: false,
       attributes: true,
       attributeFilter: ["class", "style", "hidden"],
     });
@@ -355,13 +356,11 @@
     window.addEventListener("DOMContentLoaded", startObserver);
   }
 
-// Direct safe trigger & state cleaner for Maps button (without touching maps3d.js)
   document.addEventListener(
     "click",
     (e) => {
       if (!e.target || !e.target.closest) return;
 
-      // 1. Jab Maps ka Close (X) button dabe, to modal ki state saaf reset karein
       if (e.target.closest("#btnCloseMaps3D")) {
         setTimeout(() => {
           const modal = document.getElementById("iqraMaps3DModal");
@@ -374,7 +373,6 @@
         return;
       }
 
-      // 2. Jab Maps ka Dock button dabe
       const mapsBtn = e.target.closest("#dockBtnMaps3D");
       if (!mapsBtn) return;
 
@@ -382,18 +380,11 @@
       const alreadyVisible = modal && isElementVisible(modal);
       if (!alreadyVisible) {
         showWelcomeSplash("maps");
-        // Agar maps3d.js pehle click par sirf toggle reset kare to usay force-open rakhein
-        setTimeout(() => {
-          const m = document.getElementById("iqraMaps3DModal");
-          if (m && !isElementVisible(m)) {
-            m.classList.add("open");
-            m.style.display = "flex";
-          }
-        }, 80);
       }
     },
     true
   );
+
   window.showIqraToolWelcomeSplash = showWelcomeSplash;
   window.hideIqraToolWelcomeSplash = hideWelcomeSplash;
 })(window);

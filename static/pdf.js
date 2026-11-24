@@ -254,9 +254,17 @@
       headerBar.appendChild(brandLockup);
     }
   }
-  function showDocLoadingOverlay(titleText = "Loading Document", subText = "Please wait...") {
-    const hostEl = docViewport || document.getElementById("documentPane") || document.body;
+ function showDocLoadingOverlay(titleText = "Loading Document", subText = "Please wait...") {
+    const hostEl = document.getElementById("documentPane") || docViewport || document.body;
     if (!hostEl) return;
+
+    if (dropZone) {
+      dropZone.classList.add("hidden");
+      dropZone.style.display = "none";
+    }
+    if (docContainer) {
+      docContainer.classList.remove("hidden");
+    }
 
     let overlay = document.getElementById("iqraDocLoadingOverlay");
     if (!overlay) {
@@ -734,7 +742,11 @@
         </button>
       `;
 
-      li.querySelector(".file-info").addEventListener("click", () => selectFile(index));
+    const infoEl = li.querySelector(".file-info");
+      infoEl.addEventListener("pointerdown", () => {
+        showDocLoadingOverlay(`Opening ${file.name}`, "Rendering page — Please wait...");
+      });
+      infoEl.addEventListener("click", () => selectFile(index));
 
       const removeBtn = li.querySelector(".btn-remove-file");
       removeBtn.addEventListener("click", (e) => {
@@ -902,7 +914,10 @@
     applyDocumentLayoutMode(targetMode);
 
     if (docTitle) docTitle.innerHTML = '<i class="fa-solid fa-file"></i> ' + file.name;
-    if (dropZone) dropZone.classList.add("hidden");
+  if (dropZone) {
+      dropZone.classList.add("hidden");
+      dropZone.style.display = "none";
+    }
     if (docContainer) docContainer.classList.remove("hidden");
     if (renderTarget) renderTarget.innerHTML = "";
     if (sheetTabsBar) sheetTabsBar.classList.add("hidden");
