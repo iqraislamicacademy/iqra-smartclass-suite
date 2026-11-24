@@ -42,8 +42,8 @@
       `,
     },
     maps: {
-      badge: "IQRA 2D MAPS",
-      title: "2D Maps & Geography Explorer",
+badge: "IQRA MAPS",
+      title: "Maps & Geography Explorer",
       subtitle: "Loading Political, Physical Terrain & Interactive Vector Layers...",
       accent: "#10b981",
       glow: "rgba(16, 185, 129, 0.38)",

@@ -1,10 +1,6 @@
 // ========================================================
-// IQRA SMARTCLASS SUITE - IQRA 2D MAPS & GEOGRAPHY EXPLORER (maps3d.js)
-// Clean 2D Edition:
-// 1. 3D Button & 3D Tilt/Extrusion Removed (Pure 2D Flat Stability)
-// 2. Reliable 2D Center & Zoom Focus on State/Country Click
-// 3. Left-Wall Vertical-Draggable Minimize Pill
-// 4. Compact 7-Section (A-G) English Geography Encyclopedia Card
+// IQRA SMARTCLASS SUITE - IQRA MAPS & GEOGRAPHY EXPLORER (maps3d.js)
+// Part 1 of 3: Data, Clean Titles (No "2D" or "A-G" prefixes) & Styles
 // ========================================================
 (function (window) {
   "use strict";
@@ -20,6 +16,8 @@
   let mapInstance = null;
   let isMapModalOpen = false;
   let isMapWallMinimized = false;
+  let isLeftSidebarCollapsed = false;
+  let isInfoCardCollapsed = false;
   let isFullScreen = true;
   let showMapNames = true;
   let currentMapMode = "political"; // political | physical | blank
@@ -43,7 +41,7 @@
   const liveCountryMetaCache = new Map();
 
   // ==========================================
-  // 1. COMPREHENSIVE 7-SECTION (A-G) INDIA & WORLD ENCYCLOPEDIA (ENGLISH)
+  // 1. INDIA & WORLD GEOGRAPHY ENCYCLOPEDIA (ENGLISH)
   // ==========================================
   const INDIA_STATES_DB = {
     "maharashtra": {
@@ -534,6 +532,15 @@
         flex-direction: column;
         z-index: 25;
         flex-shrink: 0;
+        transition: width 0.22s ease, min-width 0.22s ease, opacity 0.2s ease;
+        overflow: hidden;
+      }
+      #iqraMaps3DModal .maps3d-sidebar.collapsed {
+        width: 0;
+        min-width: 0;
+        border-right: none;
+        opacity: 0;
+        pointer-events: none;
       }
       #iqraMaps3DModal .maps3d-tabs {
         display: flex;
@@ -549,6 +556,7 @@
         font-size: 11px;
         cursor: pointer;
         border-bottom: 2px solid transparent;
+        white-space: nowrap;
       }
       #iqraMaps3DModal .maps3d-tab.active {
         color: #38bdf8;
@@ -673,86 +681,149 @@
         top: 10px;
         right: 10px;
         bottom: 42px;
-        width: 276px;
+        width: 292px;
         max-width: calc(100% - 20px);
-        background: rgba(15, 23, 42, 0.96);
-        backdrop-filter: blur(10px);
-        border: 1px solid #334155;
-        border-left: 2.5px solid #38bdf8;
+        background: #ffffff;
+        color: #0f172a;
+        border: 1px solid #cbd5e1;
+        border-top: 3px solid #0284c7;
         border-radius: 12px;
         padding: 10px 11px;
         z-index: 35;
-        box-shadow: -8px 10px 28px rgba(0, 0, 0, 0.55);
+        box-shadow: -8px 10px 28px rgba(15, 23, 42, 0.24);
         display: none;
         flex-direction: column;
         overflow: hidden;
+        transition: transform 0.24s ease, opacity 0.2s ease;
       }
       #iqraMaps3DModal .maps3d-info-card.visible {
         display: flex;
       }
+      #iqraMaps3DModal .maps3d-info-card.right-collapsed {
+        transform: translateX(calc(100% + 16px));
+        opacity: 0;
+        pointer-events: none;
+      }
+      #iqraMaps3DModal .info-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 7px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #e2e8f0;
+        flex-shrink: 0;
+        gap: 6px;
+      }
+      #iqraMaps3DModal .info-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      #iqraMaps3DModal .info-card-icon-btn {
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        color: #334155;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 7px;
+        line-height: 1.3;
+      }
+      #iqraMaps3DModal .info-card-icon-btn:hover {
+        background: #e2e8f0;
+        color: #0f172a;
+      }
       #iqraMaps3DModal .info-sec-tabs {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 3px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
         margin-bottom: 8px;
         padding-bottom: 7px;
-        border-bottom: 1px solid #1e293b;
+        border-bottom: 1px solid #e2e8f0;
         flex-shrink: 0;
       }
       #iqraMaps3DModal .info-sec-btn {
-        background: #1e293b;
-        color: #94a3b8;
-        border: 1px solid #334155;
-        border-radius: 5px;
-        padding: 3px 4px;
-        font-size: 9.5px;
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 3px 7px;
+        font-size: 10px;
         font-weight: 700;
         cursor: pointer;
         text-align: center;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
       #iqraMaps3DModal .info-sec-btn.active {
         background: #0284c7;
         color: #ffffff;
-        border-color: #38bdf8;
+        border-color: #0284c7;
       }
       #iqraMaps3DModal .info-sec-body {
         flex: 1;
         overflow-y: auto;
-        font-size: 11px;
-        color: #e2e8f0;
-        line-height: 1.42;
+        font-size: 11.5px;
+        color: #1e293b;
+        background: #ffffff;
+        line-height: 1.45;
         padding-right: 3px;
       }
       #iqraMaps3DModal .info-kv-row {
-        background: rgba(30, 41, 59, 0.65);
-        border: 1px solid #1e293b;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-left: 3px solid #0284c7;
         border-radius: 7px;
         padding: 6px 8px;
         margin-bottom: 6px;
       }
       #iqraMaps3DModal .info-kv-row strong {
-        color: #38bdf8;
+        color: #0369a1;
         display: block;
         font-size: 9.5px;
         font-weight: 800;
         text-transform: uppercase;
-        letter-spacing: 0.4px;
+        letter-spacing: 0.45px;
         margin-bottom: 2px;
       }
       #iqraMaps3DModal .info-kv-row div {
-        color: #f1f5f9;
+        color: #0f172a;
         font-size: 11px;
+        font-weight: 500;
         word-break: break-word;
+      }
+      #iqraMaps3DModal .maps3d-right-reopen-tab {
+        position: fixed;
+        right: 0;
+        top: 28%;
+        z-index: 2147483645;
+        background: #ffffff;
+        color: #0f172a;
+        border: 1.5px solid #0284c7;
+        border-right: none;
+        border-radius: 10px 0 0 10px;
+        padding: 8px 6px;
+        font-size: 10px;
+        font-weight: 800;
+        cursor: pointer;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        box-shadow: -4px 4px 14px rgba(15, 23, 42, 0.22);
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+      }
+      #iqraMaps3DModal .maps3d-right-reopen-tab.visible {
+        display: flex;
       }
       #iqraMaps3DModal .maps3d-camera-bar {
         position: absolute;
         bottom: 10px;
         left: 10px;
         z-index: 30;
-        background: rgba(15, 23, 42, 0.88);
+        background: rgba(15, 23, 42, 0.9);
         border: 1px solid #334155;
         border-radius: 999px;
         padding: 3px 6px;
@@ -778,7 +849,6 @@
     `;
     document.head.appendChild(style);
   }
-
   function createMapsModalDOM() {
     if (document.getElementById("iqraMaps3DModal")) return;
     injectMapsStudioStyles();
@@ -788,9 +858,12 @@
     modal.innerHTML = `
       <div class="maps3d-header">
         <div class="maps3d-title">
+          <button id="btnToggleLeftListPanel" class="maps3d-action-btn active-blue" title="Toggle State & Country List Panel">
+            <i class="fa-solid fa-bars"></i> <span>List</span>
+          </button>
           <i class="fa-solid fa-map-location-dot"></i>
           <span class="iqra-brand-pill">IQRA</span>
-          <span>2D Maps & Geography Explorer</span>
+          <span>Maps & Geography Explorer</span>
         </div>
 
         <div class="maps3d-modes">
@@ -812,13 +885,13 @@
           <button id="btnMapClearPins" class="maps3d-action-btn" title="Clear distance & drawings">
             <i class="fa-solid fa-trash-can"></i> Clear
           </button>
-          <button id="btnMapToBoard" class="maps3d-action-btn primary" title="Send Map as Image to Whiteboard">
+          <button id="btnMapToBoard" class="maps3d-action-btn primary" title="Send Map to Whiteboard & Minimize Map to Left">
             <i class="fa-solid fa-image"></i> Send to Board
           </button>
           <button id="btnMapFullScreenToggle" class="maps3d-action-btn" title="Toggle Full-Screen / Windowed">
             <i class="fa-solid fa-compress"></i>
           </button>
-          <button id="btnMapWallMinimize" class="maps3d-action-btn" title="Minimize Map to Left Side Pill">
+          <button id="btnMapWallMinimize" class="maps3d-action-btn" title="Minimize Map to Left Side">
             <i class="fa-solid fa-angles-left"></i>
           </button>
           <button id="btnCloseMaps3D" class="maps3d-action-btn" style="background:#dc2626;border-color:#b91c1c;color:#fff;" title="Close Iqra Maps">
@@ -828,7 +901,7 @@
       </div>
 
       <div class="maps3d-body">
-        <div class="maps3d-sidebar">
+        <div class="maps3d-sidebar" id="maps3dLeftSidebar">
           <div class="maps3d-tabs">
             <button class="maps3d-tab active" data-tab="india">🇮🇳 India & States</button>
             <button class="maps3d-tab" data-tab="world">🌍 All Countries</button>
@@ -868,24 +941,31 @@
           </div>
 
           <div class="maps3d-info-card" id="maps3dInfoCard">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-shrink:0;">
+            <div class="info-card-top">
               <div style="min-width:0;">
-                <div id="infoCardTitle" style="color:#f8fafc;font-weight:800;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">India</div>
-                <div id="infoCardBadge" style="font-size:9.5px;color:#38bdf8;font-weight:600;">Geography Encyclopedia</div>
+                <div id="infoCardTitle" style="color:#0f172a;font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">India</div>
+                <div id="infoCardBadge" style="font-size:10px;color:#0284c7;font-weight:700;">Geography Encyclopedia</div>
               </div>
-              <button id="btnCloseInfoCard" style="background:#1e293b;border:1px solid #334155;border-radius:6px;color:#94a3b8;cursor:pointer;font-size:11px;padding:2px 6px;">✕</button>
+              <div class="info-card-actions">
+                <button id="btnToggleRightInfoPanel" class="info-card-icon-btn" title="Slide Info Panel to Right Edge">❯|</button>
+                <button id="btnCloseInfoCard" class="info-card-icon-btn" title="Close Info Card">✕</button>
+              </div>
             </div>
             <div class="info-sec-tabs" id="infoSecTabs">
-              <button class="info-sec-btn active" data-sec="A">A.General</button>
-              <button class="info-sec-btn" data-sec="B">B.Location</button>
-              <button class="info-sec-btn" data-sec="C">C.Physical</button>
-              <button class="info-sec-btn" data-sec="D">D.Climate</button>
-              <button class="info-sec-btn" data-sec="E">E.People</button>
-              <button class="info-sec-btn" data-sec="F">F.Political</button>
-              <button class="info-sec-btn" data-sec="G">G.Economy</button>
+              <button class="info-sec-btn active" data-sec="A">General</button>
+              <button class="info-sec-btn" data-sec="B">Location</button>
+              <button class="info-sec-btn" data-sec="C">Physical</button>
+              <button class="info-sec-btn" data-sec="D">Climate</button>
+              <button class="info-sec-btn" data-sec="E">People</button>
+              <button class="info-sec-btn" data-sec="F">Political</button>
+              <button class="info-sec-btn" data-sec="G">Economy</button>
             </div>
             <div class="info-sec-body" id="infoCardMeta"></div>
           </div>
+
+          <button id="btnReopenRightInfoPanel" class="maps3d-right-reopen-tab" title="Open Geography Info Panel">
+            <span>❮ Info</span>
+          </button>
         </div>
       </div>
     `;
@@ -894,6 +974,40 @@
     initMapAnnotationCanvas();
     bindMapsModalEvents();
   }
+
+  function setLeftSidebarCollapsed(collapsed) {
+    isLeftSidebarCollapsed = Boolean(collapsed);
+    const sidebar = document.getElementById("maps3dLeftSidebar");
+    const btn = document.getElementById("btnToggleLeftListPanel");
+    if (sidebar) {
+      sidebar.classList.toggle("collapsed", isLeftSidebarCollapsed);
+    }
+    if (btn) {
+      btn.classList.toggle("active-blue", !isLeftSidebarCollapsed);
+      btn.innerHTML = isLeftSidebarCollapsed
+        ? '<i class="fa-solid fa-bars"></i> <span>Show List</span>'
+        : '<i class="fa-solid fa-bars"></i> <span>List</span>';
+    }
+    setTimeout(() => {
+      mapInstance?.resize();
+      syncMapInkCanvasSize();
+    }, 240);
+  }
+
+  function setRightInfoCollapsed(collapsed) {
+    isInfoCardCollapsed = Boolean(collapsed);
+    const card = document.getElementById("maps3dInfoCard");
+    const reopenTab = document.getElementById("btnReopenRightInfoPanel");
+    if (!card) return;
+
+    const hasProfile = Boolean(currentDisplayedProfile);
+    card.classList.toggle("right-collapsed", isInfoCardCollapsed);
+
+    if (reopenTab) {
+      reopenTab.classList.toggle("visible", hasProfile && isInfoCardCollapsed);
+    }
+  }
+
   function toggleMapLeftWallMinimize(minimize) {
     const modal = document.getElementById("iqraMaps3DModal");
     if (!modal) return;
@@ -902,6 +1016,7 @@
     let wallTab = document.getElementById("iqraMapWallRestoreTab");
     if (minimize) {
       modal.classList.add("wall-minimized");
+      document.getElementById("btnReopenRightInfoPanel")?.classList.remove("visible");
 
       if (!wallTab) {
         wallTab = document.createElement("div");
@@ -976,6 +1091,9 @@
     } else {
       modal.classList.remove("wall-minimized");
       if (wallTab) wallTab.style.display = "none";
+      if (currentDisplayedProfile && isInfoCardCollapsed) {
+        document.getElementById("btnReopenRightInfoPanel")?.classList.add("visible");
+      }
       setTimeout(() => {
         mapInstance?.resize();
         syncMapInkCanvasSize();
@@ -1112,7 +1230,7 @@
     const secObj = currentDisplayedProfile[activeInfoSection] || currentDisplayedProfile.A || {};
     const entries = Object.entries(secObj);
     if (entries.length === 0) {
-      meta.innerHTML = `<div style="color:#94a3b8;">No additional details for this section.</div>`;
+      meta.innerHTML = `<div style="color:#64748b;padding:8px 2px;">No additional details for this section.</div>`;
       return;
     }
 
@@ -1138,6 +1256,7 @@
     title.innerText = profileObj.name || "Location";
     if (badge) badge.innerText = badgeLabel;
     card.classList.add("visible");
+    setRightInfoCollapsed(false);
     renderInfoCardSection(activeInfoSection || "A");
   }
 
@@ -1146,7 +1265,7 @@
     if (!key || COUNTRY_ENCYCLOPEDIA_DB[key]) return;
     if (liveCountryMetaCache.has(key)) {
       if (highlightedRegionName.toLowerCase() === key) {
-        showInfoCard(liveCountryMetaCache.get(key), "Country Profile (A–G)");
+        showInfoCard(liveCountryMetaCache.get(key), "Country Profile");
       }
     }
   }
@@ -1297,10 +1416,10 @@
 
     if (isCountry) {
       const profile = buildGenericCountryProfile(item.name);
-      showInfoCard(profile, "Country Profile (A–G)");
+      showInfoCard(profile, "Country Profile");
     } else {
       const stateProfile = buildFullIndiaStateProfile(item.name);
-      showInfoCard(stateProfile, "Indian State Profile (A–G)");
+      showInfoCard(stateProfile, "Indian State Profile");
     }
   }
   function getInitialMapStyle() {
@@ -1703,7 +1822,6 @@
       });
 
       const dataUrl = merged.toDataURL("image/png");
-      closeMaps3DExplorer();
 
       const selectToolBtn = document.getElementById("selectToolBtn") || document.querySelector("[data-tool='select']");
       if (selectToolBtn) selectToolBtn.click();
@@ -1711,14 +1829,32 @@
       if (typeof window.addImageToWhiteboard === "function") {
         window.addImageToWhiteboard(dataUrl, 160, 110);
       }
+
+      // Minimize map to left wall just like minimize button
+      toggleMapLeftWallMinimize(true);
     });
   }
 
   function bindMapsModalEvents() {
     document.getElementById("btnCloseMaps3D")?.addEventListener("click", closeMaps3DExplorer);
     document.getElementById("btnMapWallMinimize")?.addEventListener("click", () => toggleMapLeftWallMinimize(true));
+
+    document.getElementById("btnToggleLeftListPanel")?.addEventListener("click", () => {
+      setLeftSidebarCollapsed(!isLeftSidebarCollapsed);
+    });
+
+    document.getElementById("btnToggleRightInfoPanel")?.addEventListener("click", () => {
+      setRightInfoCollapsed(!isInfoCardCollapsed);
+    });
+
+    document.getElementById("btnReopenRightInfoPanel")?.addEventListener("click", () => {
+      setRightInfoCollapsed(false);
+    });
+
     document.getElementById("btnCloseInfoCard")?.addEventListener("click", () => {
       document.getElementById("maps3dInfoCard")?.classList.remove("visible");
+      document.getElementById("btnReopenRightInfoPanel")?.classList.remove("visible");
+      isInfoCardCollapsed = false;
     });
 
     document.getElementById("infoSecTabs")?.addEventListener("click", (e) => {
@@ -1925,6 +2061,9 @@
     isMapWallMinimized = false;
     const wallTab = document.getElementById("iqraMapWallRestoreTab");
     if (wallTab) wallTab.style.display = "none";
+    if (currentDisplayedProfile && isInfoCardCollapsed) {
+      document.getElementById("btnReopenRightInfoPanel")?.classList.add("visible");
+    }
 
     renderPresetList("");
     await initMapLibreInstance();
@@ -1942,6 +2081,7 @@
     }
     const wallTab = document.getElementById("iqraMapWallRestoreTab");
     if (wallTab) wallTab.style.display = "none";
+    document.getElementById("btnReopenRightInfoPanel")?.classList.remove("visible");
     isMapModalOpen = false;
     isMapWallMinimized = false;
   }

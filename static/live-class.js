@@ -2159,3 +2159,455 @@ function buildDefaultEnglishInvite(roomSlug, passValue, timeText) {
     }
   });
 })();
+// ========================================================
+// IQRA SMARTCLASS SUITE - LIVE CLASS AUDIO ENGINE (Part 1 of 3)
+// Speaker / Headphone Mode Detection, Output Routing & Gain Control
+// ========================================================
+(function (window) {
+  "use strict";
+
+  const AUDIO_PREFS_STORAGE_KEY = "iqra_live_audio_prefs_v1";
+
+  const state = {
+    mode: "speaker",          // "speaker" | "headphone"
+    volumePercent: 100,       // 0 to 150
+    muted: false,
+    lastNonZeroVolume: 100,
+    audioCtx: null,
+    mediaGraphMap: new WeakMap(),
+    devices: {
+      speakers: [],
+      headphones: [],
+      hasExternalHeadset: false,
+    },
+  };
+
+  function loadSavedAudioPrefs() {
+    try {
+      const raw = localStorage.getItem(AUDIO_PREFS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed.mode === "speaker" || parsed.mode === "headphone") {
+        state.mode = parsed.mode;
+      }
+      if (typeof parsed.volumePercent === "number") {
+        state.volumePercent = Math.max(0, Math.min(150, Math.round(parsed.volumePercent)));
+        if (state.volumePercent > 0) state.lastNonZeroVolume = state.volumePercent;
+      }
+      if (typeof parsed.muted === "boolean") {
+        state.muted = parsed.muted;
+      }
+    } catch (_) {}
+  }
+
+  function saveAudioPrefs() {
+    try {
+      localStorage.setItem(
+        AUDIO_PREFS_STORAGE_KEY,
+        JSON.stringify({
+          mode: state.mode,
+          volumePercent: state.volumePercent,
+          muted: state.muted,
+        })
+      );
+    } catch (_) {}
+  }
+
+  function ensureAudioContext() {
+    if (state.audioCtx) {
+      if (state.audioCtx.state === "suspended") {
+        state.audioCtx.resume().catch(() => {});
+      }
+      return state.audioCtx;
+    }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    try {
+      state.audioCtx = new AudioCtx();
+      if (state.audioCtx.state === "suspended") {
+        state.audioCtx.resume().catch(() => {});
+      }
+      return state.audioCtx;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function classifyAudioOutputs(deviceList) {
+    const speakers = [];
+    const headphones = [];
+    let hasExternalHeadset = false;
+
+    const headsetKeywords = [
+      "headphone", "headset", "earphone", "earbud", "airpod",
+      "buds", "bluetooth", "handsfree", "hands-free", "wired", "usb", "tws"
+    ];
+    const speakerKeywords = [
+      "speaker", "loudspeaker", "hands-free speaker", "built-in", "default"
+    ];
+
+    (deviceList || []).forEach((dev) => {
+      if (!dev || dev.kind !== "audiooutput") return;
+      const label = (dev.label || "").toLowerCase();
+
+      const isHeadset = headsetKeywords.some((kw) => label.includes(kw));
+      const isSpeaker = speakerKeywords.some((kw) => label.includes(kw));
+
+      if (isHeadset) {
+        headphones.push(dev);
+        hasExternalHeadset = true;
+      } else if (isSpeaker || dev.deviceId === "default" || dev.deviceId === "communications") {
+        speakers.push(dev);
+      } else {
+        speakers.push(dev);
+      }
+    });
+
+    state.devices = { speakers, headphones, hasExternalHeadset };
+    return state.devices;
+  }
+
+  async function refreshAudioOutputDevices() {
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.enumerateDevices !== "function") {
+      return state.devices;
+    }
+    try {
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      return classifyAudioOutputs(allDevices);
+    } catch (_) {
+      return state.devices;
+    }
+  }
+
+  function pickTargetDeviceId(targetMode) {
+    const { speakers, headphones, hasExternalHeadset } = state.devices;
+
+    if (targetMode === "headphone") {
+      if (headphones.length > 0) return headphones[0].deviceId;
+      return hasExternalHeadset ? "default" : "";
+    }
+
+    // Speaker mode: prefer explicit loudspeaker / default output
+    const loud = speakers.find((d) => (d.label || "").toLowerCase().includes("speaker"));
+    if (loud) return loud.deviceId;
+    const def = speakers.find((d) => d.deviceId === "default");
+    if (def) return def.deviceId;
+    return speakers[0] ? speakers[0].deviceId : "";
+  }
+
+  function getEffectiveGainValue() {
+    if (state.muted || state.volumePercent <= 0) return 0;
+    // 100% -> 1.0 gain; up to 150% -> 1.5x clean boost via compressor/gain
+    return state.volumePercent / 100;
+  }
+
+  function attachGainNodeToMediaElement(el) {
+    if (!el || state.mediaGraphMap.has(el)) return state.mediaGraphMap.get(el) || null;
+    const ctx = ensureAudioContext();
+    if (!ctx) return null;
+
+    try {
+      const source = ctx.createMediaElementSource(el);
+      const gainNode = ctx.createGain();
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = -14;
+      compressor.knee.value = 18;
+      compressor.ratio.value = 6;
+      compressor.attack.value = 0.005;
+      compressor.release.value = 0.15;
+
+      gainNode.gain.value = getEffectiveGainValue();
+
+      source.connect(gainNode);
+      gainNode.connect(compressor);
+      compressor.connect(ctx.destination);
+
+      const bundle = { source, gainNode, compressor };
+      state.mediaGraphMap.set(el, bundle);
+      return bundle;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function applyAudioRoutingAndVolumeToElement(el) {
+    if (!el) return;
+
+    const gainVal = getEffectiveGainValue();
+    // Standard element volume capped at 1.0; >100% boost handled via Web Audio GainNode
+    el.muted = state.muted || state.volumePercent <= 0;
+    el.volume = Math.max(0, Math.min(1, gainVal));
+
+    if (typeof el.play === "function" && el.srcObject) {
+      const bundle = attachGainNodeToMediaElement(el);
+      if (bundle && bundle.gainNode && state.audioCtx) {
+        bundle.gainNode.gain.setTargetAtTime(gainVal, state.audioCtx.currentTime, 0.02);
+      }
+    }
+
+    const deviceId = pickTargetDeviceId(state.mode);
+    if (deviceId && typeof el.setSinkId === "function") {
+      try {
+        await el.setSinkId(deviceId);
+      } catch (_) {}
+    }
+  }
+
+  async function applyAudioSettingsToAllMedia() {
+    await refreshAudioOutputDevices();
+    const elements = Array.from(document.querySelectorAll("audio, video"));
+    await Promise.all(elements.map((el) => applyAudioRoutingAndVolumeToElement(el)));
+
+    if (typeof window.onIqraAudioStateChanged === "function") {
+      window.onIqraAudioStateChanged({
+        mode: state.mode,
+        volumePercent: state.volumePercent,
+        muted: state.muted,
+        devices: state.devices,
+      });
+    }
+  }
+
+  loadSavedAudioPrefs();
+
+  window.IqraLiveAudioEngine = {
+    getState: () => ({ ...state, devices: { ...state.devices } }),
+    setMode: async (newMode) => {
+      if (newMode !== "speaker" && newMode !== "headphone") return;
+      state.mode = newMode;
+      ensureAudioContext();
+      saveAudioPrefs();
+      await applyAudioSettingsToAllMedia();
+    },
+    setVolume: async (vol) => {
+      const clamped = Math.max(0, Math.min(150, Math.round(Number(vol) || 0)));
+      state.volumePercent = clamped;
+      if (clamped > 0) {
+        state.muted = false;
+        state.lastNonZeroVolume = clamped;
+      } else {
+        state.muted = true;
+      }
+      ensureAudioContext();
+      saveAudioPrefs();
+      await applyAudioSettingsToAllMedia();
+    },
+    toggleMute: async () => {
+      if (state.muted || state.volumePercent === 0) {
+        state.muted = false;
+        state.volumePercent = state.lastNonZeroVolume > 0 ? state.lastNonZeroVolume : 100;
+      } else {
+        state.lastNonZeroVolume = state.volumePercent;
+        state.muted = true;
+      }
+      ensureAudioContext();
+      saveAudioPrefs();
+      await applyAudioSettingsToAllMedia();
+    },
+    refreshDevices: refreshAudioOutputDevices,
+    applyToElement: applyAudioRoutingAndVolumeToElement,
+    applyAll: applyAudioSettingsToAllMedia,
+  };
+})(window);
+// ========================================================
+// IQRA SMARTCLASS SUITE - LIVE CLASS AUDIO UI BINDINGS (Part 2 of 3)
+// Connects Top Bar Speaker/Headphone Buttons & Volume Slider to Engine
+// ========================================================
+(function (window, document) {
+  "use strict";
+
+  function getUiElements() {
+    return {
+      bar: document.getElementById("iqraLiveAudioBar"),
+      btnSpeaker: document.getElementById("btnAudioSpeakerMode"),
+      btnHeadphone: document.getElementById("btnAudioHeadphoneMode"),
+      btnMute: document.getElementById("btnAudioMuteToggle"),
+      volIcon: document.getElementById("iqraAudioVolumeIcon"),
+      volSlider: document.getElementById("iqraLiveVolumeSlider"),
+      volText: document.getElementById("iqraLiveVolumeValue"),
+      statusBadge: document.getElementById("iqraAudioDeviceStatus"),
+    };
+  }
+
+  function updateVolumeIcon(iconEl, volPercent, muted) {
+    if (!iconEl) return;
+    iconEl.classList.remove("fa-volume-xmark", "fa-volume-off", "fa-volume-low", "fa-volume-high");
+    if (muted || volPercent <= 0) {
+      iconEl.classList.add("fa-volume-xmark");
+    } else if (volPercent < 40) {
+      iconEl.classList.add("fa-volume-low");
+    } else {
+      iconEl.classList.add("fa-volume-high");
+    }
+  }
+
+  function syncAudioBarUi(snapshot) {
+    const engine = window.IqraLiveAudioEngine;
+    const st = snapshot || (engine ? engine.getState() : null);
+    if (!st) return;
+
+    const ui = getUiElements();
+    const isSpeaker = st.mode === "speaker";
+
+    if (ui.btnSpeaker) ui.btnSpeaker.classList.toggle("active", isSpeaker);
+    if (ui.btnHeadphone) ui.btnHeadphone.classList.toggle("active", !isSpeaker);
+
+    const displayVol = st.muted ? 0 : st.volumePercent;
+    if (ui.volSlider) ui.volSlider.value = String(displayVol);
+    if (ui.volText) ui.volText.textContent = `${displayVol}%`;
+    updateVolumeIcon(ui.volIcon, displayVol, st.muted);
+
+    if (ui.statusBadge) {
+      if (st.muted || displayVol === 0) {
+        ui.statusBadge.textContent = "Muted";
+      } else if (isSpeaker) {
+        ui.statusBadge.textContent = "Speaker Active";
+      } else {
+        const hasHeadset = st.devices && st.devices.hasExternalHeadset;
+        ui.statusBadge.textContent = hasHeadset ? "Headphone Active" : "Headphone / Earpiece";
+      }
+    }
+  }
+
+  function bindAudioBarEvents() {
+    const engine = window.IqraLiveAudioEngine;
+    if (!engine) return;
+
+    const ui = getUiElements();
+
+    ui.btnSpeaker?.addEventListener("click", async () => {
+      await engine.setMode("speaker");
+      syncAudioBarUi(engine.getState());
+    });
+
+    ui.btnHeadphone?.addEventListener("click", async () => {
+      await engine.setMode("headphone");
+      syncAudioBarUi(engine.getState());
+    });
+
+    ui.btnMute?.addEventListener("click", async () => {
+      await engine.toggleMute();
+      syncAudioBarUi(engine.getState());
+    });
+
+    ui.volSlider?.addEventListener("input", async (e) => {
+      const nextVal = Number(e.target.value);
+      if (ui.volText) ui.volText.textContent = `${nextVal}%`;
+      updateVolumeIcon(ui.volIcon, nextVal, nextVal === 0);
+      await engine.setVolume(nextVal);
+    });
+
+    window.onIqraAudioStateChanged = (snap) => {
+      syncAudioBarUi(snap);
+    };
+
+    syncAudioBarUi(engine.getState());
+    engine.applyAll().then(() => syncAudioBarUi(engine.getState()));
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindAudioBarEvents);
+  } else {
+    bindAudioBarEvents();
+  }
+
+  window.syncIqraLiveAudioBarUi = syncAudioBarUi;
+})(window, document);
+// ========================================================
+// IQRA SMARTCLASS SUITE - LIVE CLASS STREAM WATCHER (Part 3 of 3)
+// Watches New Audio/Video Elements, Headset Plug/Unplug & Touch Unlock
+// ========================================================
+(function (window, document) {
+  "use strict";
+
+  function attachToElementWhenReady(el) {
+    const engine = window.IqraLiveAudioEngine;
+    if (!engine || !el) return;
+    if (el.tagName !== "AUDIO" && el.tagName !== "VIDEO") return;
+
+    engine.applyToElement(el);
+
+    if (!el._iqraAudioBound) {
+      el._iqraAudioBound = true;
+      el.addEventListener("loadedmetadata", () => engine.applyToElement(el));
+      el.addEventListener("canplay", () => engine.applyToElement(el));
+      el.addEventListener("play", () => engine.applyToElement(el));
+    }
+  }
+
+  function scanExistingMediaElements() {
+    document.querySelectorAll("audio, video").forEach((el) => {
+      attachToElementWhenReady(el);
+    });
+  }
+
+  function watchDomForNewMedia() {
+    if (!document.body || typeof MutationObserver === "undefined") return;
+
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (!node || node.nodeType !== 1) continue;
+          if (node.tagName === "AUDIO" || node.tagName === "VIDEO") {
+            attachToElementWhenReady(node);
+          } else if (typeof node.querySelectorAll === "function") {
+            node.querySelectorAll("audio, video").forEach((child) => {
+              attachToElementWhenReady(child);
+            });
+          }
+        }
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  function watchDeviceChanges() {
+    const engine = window.IqraLiveAudioEngine;
+    if (!engine || !navigator.mediaDevices) return;
+
+    if (typeof navigator.mediaDevices.addEventListener === "function") {
+      navigator.mediaDevices.addEventListener("devicechange", () => {
+        engine.applyAll();
+      });
+    } else if ("ondevicechange" in navigator.mediaDevices) {
+      navigator.mediaDevices.ondevicechange = () => {
+        engine.applyAll();
+      };
+    }
+  }
+
+  function bindFirstUserGestureUnlock() {
+    const unlock = () => {
+      const engine = window.IqraLiveAudioEngine;
+      if (engine) {
+        engine.applyAll();
+      }
+      document.removeEventListener("pointerdown", unlock, true);
+      document.removeEventListener("touchstart", unlock, true);
+      document.removeEventListener("keydown", unlock, true);
+    };
+
+    document.addEventListener("pointerdown", unlock, true);
+    document.addEventListener("touchstart", unlock, true);
+    document.addEventListener("keydown", unlock, true);
+  }
+
+  function initLiveAudioWatcher() {
+    scanExistingMediaElements();
+    watchDomForNewMedia();
+    watchDeviceChanges();
+    bindFirstUserGestureUnlock();
+
+    window.IqraAttachLiveAudioElement = attachToElementWhenReady;
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initLiveAudioWatcher);
+  } else {
+    initLiveAudioWatcher();
+  }
+})(window, document);
