@@ -177,6 +177,102 @@ title: "ھدایة النحو (بشریٰ)",
     language: "Hindi",
     path: "Books/Ilm-e-Quran/Hindi-translation-kanz-ul-iman.pdf"
   },
+  {
+    title: "النبراس على شرح العقائد",
+    category: "Aqaid",
+    language: "Arabic",
+    path: "Books/Aqaid/Arabic/النبراس-على-شرح-العقائد.pdf"
+  },
+  {
+    title: "Bunyadi Aqaid Aur Mamolat-e-Ahlesunnat",
+    category: "Aqaid",
+    language: "Urdu",
+    path: "Books/Aqaid/Urdu/Bunyadi-Aqaid-Aur-Mamolat-e-Ahlesunnat.pdf"
+  },
+  {
+    title: "Hidaya Matan Part 1",
+    category: "Ilm-e-Fiqah",
+    language: "Arabic",
+    path: "Books/Ilm-e-Fiqah/Arabic/Hidaya-Matan-Part-1.pdf"
+  },
+  {
+    title: "Noorul Izaah (Darussirah)",
+    category: "Ilm-e-Fiqah",
+    language: "Arabic",
+    path: "Books/Ilm-e-Fiqah/Arabic/Noorul-Izaah-Darussirah.pdf"
+  },
+  {
+    title: "Noorul Izaah (Dawat-e-Islami)",
+    category: "Ilm-e-Fiqah",
+    language: "Arabic",
+    path: "Books/Ilm-e-Fiqah/Arabic/Noorul-Izaah-Dawat-e-Islami.pdf"
+  },
+  {
+    title: "Qudoori (Bairut)",
+    category: "Ilm-e-Fiqah",
+    language: "Arabic",
+    path: "Books/Ilm-e-Fiqah/Arabic/Qudoori-Bairut.pdf"
+  },
+  {
+    title: "Farz Uloom Sikhiye",
+    category: "Ilm-e-Fiqah",
+    language: "Urdu",
+    path: "Books/Ilm-e-Fiqah/Urdu/Farz-uloom-sikhiye.pdf"
+  },
+  {
+    title: "Riyaz-us-Saliheen",
+    category: "Ilm-e-Hadees",
+    language: "Arabic",
+    path: "Books/Ilm-e-Hadees/Arabic/Riyazus-u-Saliheen.pdf"
+  },
+  {
+    title: "Sharah Arbayeen Nawawiyyah",
+    category: "Ilm-e-Hadees",
+    language: "Arabic",
+    path: "Books/Ilm-e-Hadees/Arabic/Sharah-Arbayeen-Nawawiyyah.pdf"
+  },
+  {
+    title: "Nisab-ul-Nahw",
+    category: "Ilm-e-Nahw",
+    language: "Urdu",
+    path: "Books/Ilm-e-Nahw/Urdu/Nisab-ul-Nahw.pdf"
+  },
+  {
+    title: "Sharh-e-Miat-e-Amil",
+    category: "Ilm-e-Nahw",
+    language: "Arabic",
+    path: "Books/Ilm-e-Nahw/Arabic/Sharh-e-Miat-e-Amil.pdf"
+  },
+  {
+    title: "Usool-e-Shashi",
+    category: "Ilme-Usool-e-Fiqh",
+    language: "Arabic",
+    path: "Books/Ilme-Usool-e-Fiqh/Arabic/Usool-e-Shashi.pdf"
+  },
+  {
+    title: "Talkhees Usool-ul-Shashi",
+    category: "Ilme-Usool-e-Fiqh",
+    language: "Urdu",
+    path: "Books/Ilme-Usool-e-Fiqh/Urdu/Talkhees-usool-ul-shashi.pdf"
+  },
+  {
+    title: "Anwarul Haramin Part 1",
+    category: "Ilm-e-Tafseer",
+    language: "Arabic",
+    path: "Books/Ilm-e-Tafseer/Arabic/Anwarul-Haramin-Part-1.pdf"
+  },
+  {
+    title: "Anwarul Haramin Part 2",
+    category: "Ilm-e-Tafseer",
+    language: "Arabic",
+    path: "Books/Ilm-e-Tafseer/Arabic/Anwarul-Haramin-Part-2.pdf"
+  },
+  {
+    title: "Anwarul Haramin Part 3",
+    category: "Ilm-e-Tafseer",
+    language: "Arabic",
+    path: "Books/Ilm-e-Tafseer/Arabic/Anwarul-Haramin-Part-3.pdf"
+  },  
 ];
 
 // ========================================================
