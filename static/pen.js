@@ -1,10 +1,6 @@
 // ==========================================
 // PEN SUITE & MULTI-SURFACE DRAWING ENGINE (pen.js)
-// Works on Whiteboard + Uploaded Images + PDF Viewer
-// Features:
-// 1. Live Real-Time Tremor Stabilizer (EMA + Quadratic Bezier) for Smooth Pens
-// 2. 3 Zero-Lag Fast Pens (Fast Normal, Fast English, Fast Urdu) for Android & Digital Boards
-// 3. Zero Tail/Diagonal Line on Pen Lift + Highlighter Protected from Finger Eraser
+// Part 1 of 3: Dock Color Flyout, Pen & Highlighter State, Helpers & Stabilizer
 // ==========================================
 
 // 1. DOCK COLOR FLYOUT & PRESET SWATCHES
@@ -40,14 +36,15 @@ function applySelectedColor(hexColor) {
     activeTool === "pen" &&
     typeof fabricCanvas !== "undefined" &&
     fabricCanvas &&
-    fabricCanvas.freeDrawingBrush
+    fabricCanvas.freeDrawingBrush &&
+    !(window.IqraHighlighterState && window.IqraHighlighterState.isActiveMode)
   ) {
     fabricCanvas.freeDrawingBrush.color = hexColor;
   }
 
   if (typeof fabricCanvas !== "undefined" && fabricCanvas) {
     const activeObj = fabricCanvas.getActiveObject();
-    if (activeObj) {
+    if (activeObj && !activeObj.isHighlighter) {
       if (activeObj.type === "i-text") activeObj.set("fill", hexColor);
       else if (activeObj.stroke) activeObj.set("stroke", hexColor);
       fabricCanvas.renderAll();
@@ -73,7 +70,7 @@ if (typeof brushColor !== "undefined" && brushColor) {
   });
 }
 
-// 2. PEN SUITE ENGINE (WHITEBOARD + IMAGE + PDF)
+// 2. PEN SUITE & DEDICATED HIGHLIGHTER ENGINE (WHITEBOARD + IMAGE + PDF)
 (function initPenSuiteEngine() {
   const penWrapper = document.getElementById("penSuiteWrapper");
   const mainBtn = document.getElementById("penSuiteMainBtn");
@@ -87,7 +84,7 @@ if (typeof brushColor !== "undefined" && brushColor) {
 
   if (!penWrapper || !mainBtn || !flyout) return;
 
-  // Inject 3 Zero-Lag Fast Pens into the existing Pen Style grid without altering existing 5 buttons
+  // Inject 3 Zero-Lag Fast Pens into the existing Pen Style grid
   (function injectFastPenButtons() {
     const firstPenBtn = flyout.querySelector(".pen-type-btn");
     if (!firstPenBtn || !firstPenBtn.parentElement) return;
@@ -119,8 +116,28 @@ if (typeof brushColor !== "undefined" && brushColor) {
     isActive: false,
   };
 
+  // Separate Highlighter State (independent color, thickness size & adjustable transparency)
+  const HighlighterState = {
+    color: "#facc15",
+    size: 18,
+    opacity: 0.25,
+    isActiveMode: false,
+  };
+  window.IqraHighlighterState = HighlighterState;
+
+  let hlControlsEl = null;
+  let hlSizeSlider = null;
+  let hlSizeDisplay = null;
+  let hlOpacitySlider = null;
+  let hlOpacityDisplay = null;
+  let hlCustomColorInput = null;
+
   function isFastPenType(t) {
     return t === "fast-normal" || t === "fast-en" || t === "fast-ur";
+  }
+
+  function isHighlighterSelected() {
+    return PenState.type === "highlighter";
   }
 
   const activeTouchPointers = new Set();
@@ -159,24 +176,233 @@ if (typeof brushColor !== "undefined" && brushColor) {
       g = parseInt(clean[1] + clean[1], 16);
       b = parseInt(clean[2] + clean[2], 16);
     }
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    const safeAlpha = Math.max(0.05, Math.min(0.95, Number(alpha) || 0.25));
+    return `rgba(${r}, ${g}, ${b}, ${safeAlpha})`;
+  }
+
+  function getActiveToolColor() {
+    return isHighlighterSelected() ? HighlighterState.color : PenState.color;
+  }
+
+  function getActiveToolSize() {
+    return isHighlighterSelected() ? HighlighterState.size : PenState.size;
   }
 
   function getCursorDataUrl() {
-    const curColor = encodeURIComponent(PenState.color);
+    const curColor = encodeURIComponent(getActiveToolColor());
     return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="${curColor}" stroke="%23ffffff" stroke-width="1.5"/></svg>`;
   }
 
+  function syncHighlighterUiValues() {
+    if (!hlControlsEl) return;
+    const isHl = isHighlighterSelected();
+    hlControlsEl.style.display = isHl ? "flex" : "none";
+
+    if (hlSizeSlider) hlSizeSlider.value = String(HighlighterState.size);
+    if (hlSizeDisplay) hlSizeDisplay.textContent = `${HighlighterState.size}px`;
+
+    const pct = Math.round(HighlighterState.opacity * 100);
+    if (hlOpacitySlider) hlOpacitySlider.value = String(pct);
+    if (hlOpacityDisplay) hlOpacityDisplay.textContent = `${pct}%`;
+
+    if (hlCustomColorInput) hlCustomColorInput.value = HighlighterState.color;
+
+    hlControlsEl.querySelectorAll(".iqra-hl-swatch").forEach((sw) => {
+      const swColor = (sw.getAttribute("data-hl-color") || "").toLowerCase();
+      const isSelected = swColor === HighlighterState.color.toLowerCase();
+      sw.classList.toggle("active", isSelected);
+      sw.style.setProperty("background-color", sw.getAttribute("data-hl-color"), "important");
+      sw.style.boxShadow = isSelected
+        ? `0 0 0 2px #ffffff, 0 0 0 4px ${swColor}`
+        : "0 1px 3px rgba(15, 23, 42, 0.25)";
+      sw.style.transform = isSelected ? "scale(1.1)" : "scale(1)";
+    });
+  }
+
+  // Build Highlighter color palette, thickness & transparency controls
+  function buildHighlighterControlsUi() {
+    if (hlControlsEl) return;
+
+    const palette = [
+      { color: "#facc15", label: "Yellow" },
+      { color: "#4ade80", label: "Green" },
+      { color: "#f472b6", label: "Pink" },
+      { color: "#38bdf8", label: "Sky Blue" },
+      { color: "#fb923c", label: "Orange" },
+      { color: "#c084fc", label: "Purple" },
+    ];
+
+    if (!document.getElementById("iqraHighlighterPanelStyle")) {
+      const swatchRules = palette
+        .map(
+          (p, idx) => `
+          #iqraHighlighterControlsBox .iqra-hl-swatch[data-swatch-idx="${idx}"] {
+            background-color: ${p.color} !important;
+          }
+        `
+        )
+        .join("\n");
+
+      const styleTag = document.createElement("style");
+      styleTag.id = "iqraHighlighterPanelStyle";
+      styleTag.textContent = `
+        #iqraHighlighterControlsBox .iqra-hl-swatch {
+          width: 22px;
+          height: 22px;
+          min-width: 22px;
+          min-height: 22px;
+          border-radius: 999px;
+          border: 2px solid #ffffff;
+          padding: 0;
+          margin: 0;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: transform 0.14s ease, box-shadow 0.14s ease;
+          appearance: none;
+          -webkit-appearance: none;
+        }
+        #iqraHighlighterControlsBox .iqra-hl-swatch:hover {
+          transform: scale(1.12);
+        }
+        ${swatchRules}
+      `;
+      document.head.appendChild(styleTag);
+    }
+
+    hlControlsEl = document.createElement("div");
+    hlControlsEl.id = "iqraHighlighterControlsBox";
+    hlControlsEl.style.cssText =
+      "display:none; flex-direction:column; gap:8px; margin-top:8px; padding:9px 10px; border-radius:10px; background:#f8fafc; border:1px solid #cbd5e1; color:#0f172a; font-size:11.5px;";
+
+    const swatchesHtml = palette
+      .map(
+        (p, idx) =>
+          `<button type="button" class="iqra-hl-swatch" data-swatch-idx="${idx}" data-hl-color="${p.color}" title="${p.label}"></button>`
+      )
+      .join("");
+
+    hlControlsEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:#0f172a;font-size:11.5px;">
+        <i class="fa-solid fa-highlighter" style="color:#eab308;"></i>
+        <span>Highlighter</span>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 0;">
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">${swatchesHtml}</div>
+        <input type="color" id="iqraHlCustomColor" value="#facc15" title="Custom Color" style="width:24px;height:24px;border:1px solid #cbd5e1;border-radius:999px;background:transparent;cursor:pointer;padding:0;overflow:hidden;" />
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#475569;">
+          <span>Size</span>
+          <strong id="iqraHlSizeVal" style="color:#0f172a;">18px</strong>
+        </div>
+        <input type="range" id="iqraHlSizeSlider" min="6" max="48" value="18" step="1" style="width:100%;accent-color:#eab308;cursor:pointer;margin:0;" />
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#475569;">
+          <span>Transparency</span>
+          <strong id="iqraHlOpacityVal" style="color:#0f172a;">25%</strong>
+        </div>
+        <input type="range" id="iqraHlOpacitySlider" min="10" max="70" value="25" step="1" style="width:100%;accent-color:#0284c7;cursor:pointer;margin:0;" />
+      </div>
+    `;
+
+    flyout.appendChild(hlControlsEl);
+
+    hlSizeSlider = hlControlsEl.querySelector("#iqraHlSizeSlider");
+    hlSizeDisplay = hlControlsEl.querySelector("#iqraHlSizeVal");
+    hlOpacitySlider = hlControlsEl.querySelector("#iqraHlOpacitySlider");
+    hlOpacityDisplay = hlControlsEl.querySelector("#iqraHlOpacityVal");
+    hlCustomColorInput = hlControlsEl.querySelector("#iqraHlCustomColor");
+
+    hlControlsEl.querySelectorAll(".iqra-hl-swatch").forEach((sw) => {
+      sw.addEventListener("click", (e) => {
+        e.stopPropagation();
+        HighlighterState.color = sw.getAttribute("data-hl-color") || "#facc15";
+        syncHighlighterUiValues();
+        updatePenPreview();
+        window.applyPenSuiteSettings();
+      });
+    });
+
+    hlCustomColorInput?.addEventListener("input", (e) => {
+      e.stopPropagation();
+      HighlighterState.color = e.target.value;
+      syncHighlighterUiValues();
+      updatePenPreview();
+      window.applyPenSuiteSettings();
+    });
+
+    const stopHlSliderPropagation = (e) => e.stopPropagation();
+
+    hlSizeSlider?.addEventListener("input", (e) => {
+      const v = parseInt(e.target.value, 10);
+      if (isNaN(v)) return;
+      HighlighterState.size = v;
+      syncHighlighterUiValues();
+      updatePenPreview();
+      if (
+        typeof fabricCanvas !== "undefined" &&
+        fabricCanvas &&
+        fabricCanvas.freeDrawingBrush &&
+        isHighlighterSelected()
+      ) {
+        fabricCanvas.freeDrawingBrush.width = HighlighterState.size;
+      }
+    });
+
+    hlOpacitySlider?.addEventListener("input", (e) => {
+      const pct = parseInt(e.target.value, 10);
+      if (isNaN(pct)) return;
+      HighlighterState.opacity = Math.max(0.1, Math.min(0.7, pct / 100));
+      syncHighlighterUiValues();
+      updatePenPreview();
+      if (
+        typeof fabricCanvas !== "undefined" &&
+        fabricCanvas &&
+        fabricCanvas.freeDrawingBrush &&
+        isHighlighterSelected()
+      ) {
+        fabricCanvas.freeDrawingBrush.color = hexToRgba(
+          HighlighterState.color,
+          HighlighterState.opacity
+        );
+      }
+    });
+
+    [hlSizeSlider, hlOpacitySlider].forEach((sl) => {
+      if (!sl) return;
+      sl.addEventListener("mousedown", stopHlSliderPropagation);
+      sl.addEventListener("touchstart", stopHlSliderPropagation, { passive: true });
+      sl.addEventListener("pointerdown", stopHlSliderPropagation);
+    });
+
+    syncHighlighterUiValues();
+  }
+
   function updatePenPreview() {
-    if (colorIndicator) colorIndicator.style.backgroundColor = PenState.color;
-    if (sizeDisplay) sizeDisplay.textContent = PenState.size + "px";
+    buildHighlighterControlsUi();
+    const isHl = isHighlighterSelected();
+    HighlighterState.isActiveMode = isHl;
+    syncHighlighterUiValues();
+
+    const activeColor = getActiveToolColor();
+    const activeSize = getActiveToolSize();
+
+    if (colorIndicator) colorIndicator.style.backgroundColor = activeColor;
+    if (sizeDisplay) sizeDisplay.textContent = activeSize + "px";
+    if (sizeSlider) sizeSlider.value = String(activeSize);
+
     if (previewLine) {
-      previewLine.style.backgroundColor = PenState.color;
-      previewLine.style.height =
-        PenState.type === "highlighter"
-          ? Math.min(Math.max(PenState.size * 2, 6), 18) + "px"
-          : Math.min(Math.max(PenState.size, 2), 20) + "px";
-      previewLine.style.opacity = PenState.type === "highlighter" ? "0.24" : "1";
+      previewLine.style.backgroundColor = activeColor;
+      previewLine.style.height = isHl
+        ? Math.min(Math.max(activeSize, 8), 24) + "px"
+        : Math.min(Math.max(activeSize, 2), 20) + "px";
+      previewLine.style.opacity = isHl ? String(HighlighterState.opacity) : "1";
     }
 
     if (PenState.isActive && typeof fabricCanvas !== "undefined" && fabricCanvas) {
@@ -339,9 +565,8 @@ if (typeof brushColor !== "undefined" && brushColor) {
     }
     return canvas.getPointer(e);
   }
-
   // ========================================================
-  // WHITEBOARD BRUSHES (5 STABILIZED + 3 ZERO-LAG FAST PENS)
+  // WHITEBOARD BRUSHES (5 STABILIZED + 3 ZERO-LAG FAST PENS + INDEPENDENT HIGHLIGHTER)
   // ========================================================
   function createFastNormalBrush(canvas) {
     const brush = new fabric.BaseBrush();
@@ -668,13 +893,16 @@ if (typeof brushColor !== "undefined" && brushColor) {
       if (Math.abs(dy) < Math.abs(dx) * 0.08) this.endPt.y = this.startPt.y;
       else if (Math.abs(dx) < Math.abs(dy) * 0.08) this.endPt.x = this.startPt.x;
 
+      const strokeColor = hexToRgba(HighlighterState.color, HighlighterState.opacity);
+      const strokeWidth = Math.max(6, HighlighterState.size);
+
       const ctx = this.canvas.contextTop;
       this.canvas.clearContext(ctx);
       ctx.save();
       const vpt = this.canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
       ctx.transform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5]);
-      ctx.strokeStyle = this.color;
-      ctx.lineWidth = this.width;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = strokeWidth;
       ctx.lineCap = "butt";
       ctx.beginPath();
       ctx.moveTo(this.startPt.x, this.startPt.y);
@@ -689,11 +917,14 @@ if (typeof brushColor !== "undefined" && brushColor) {
 
       const dist = Math.hypot(this.endPt.x - this.startPt.x, this.endPt.y - this.startPt.y);
       if (dist > 3) {
+        const strokeColor = hexToRgba(HighlighterState.color, HighlighterState.opacity);
+        const strokeWidth = Math.max(6, HighlighterState.size);
+
         const lineObj = new fabric.Line(
           [this.startPt.x, this.startPt.y, this.endPt.x, this.endPt.y],
           {
-            stroke: this.color,
-            strokeWidth: this.width,
+            stroke: strokeColor,
+            strokeWidth: strokeWidth,
             strokeLineCap: "butt",
             selectable: false,
             evented: false,
@@ -723,8 +954,7 @@ if (typeof brushColor !== "undefined" && brushColor) {
       hlCanvas.className = "pen-highlighter-canvas";
       hlCanvas.width = penCanvas.width;
       hlCanvas.height = penCanvas.height;
-      hlCanvas.style.cssText =
-        "position:absolute; top:0; left:0; width:100%; height:100%; z-index:44; pointer-events:none;";
+      hlCanvas.style.cssText = `position:absolute; top:0; left:0; width:${penCanvas.width}px; height:${penCanvas.height}px; z-index:44; pointer-events:none;`;
       parent.insertBefore(hlCanvas, penCanvas);
     } else if (hlCanvas.width !== penCanvas.width || hlCanvas.height !== penCanvas.height) {
       const tmp = document.createElement("canvas");
@@ -733,6 +963,8 @@ if (typeof brushColor !== "undefined" && brushColor) {
       tmp.getContext("2d").drawImage(hlCanvas, 0, 0);
       hlCanvas.width = penCanvas.width;
       hlCanvas.height = penCanvas.height;
+      hlCanvas.style.width = `${penCanvas.width}px`;
+      hlCanvas.style.height = `${penCanvas.height}px`;
       hlCanvas.getContext("2d").drawImage(tmp, 0, 0, hlCanvas.width, hlCanvas.height);
     }
     return hlCanvas;
@@ -890,7 +1122,6 @@ if (typeof brushColor !== "undefined" && brushColor) {
     },
     true
   );
-
   function bindSurfaceDrawing(canvas) {
     if (canvas._penSurfaceBound) return;
     canvas._penSurfaceBound = true;
@@ -964,7 +1195,6 @@ if (typeof brushColor !== "undefined" && brushColor) {
       const startPt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
 
       if (isFastPenType(PenState.type)) {
-        // Zero-lag direct incremental mode (skips heavy full-canvas getImageData restore on every move)
         baseSnapshot = null;
         lastFastPt = startPt;
       } else {
@@ -1041,7 +1271,7 @@ if (typeof brushColor !== "undefined" && brushColor) {
         return;
       }
 
-      // STABILIZED PENS
+      // STABILIZED PENS & INDEPENDENT HIGHLIGHTER
       const added = stabilizer.push(rawPt);
       if (!added && PenState.type !== "highlighter") return;
 
@@ -1082,8 +1312,8 @@ if (typeof brushColor !== "undefined" && brushColor) {
         if (Math.abs(dy) < Math.abs(dx) * 0.08) endY = start.y;
         else if (Math.abs(dx) < Math.abs(dy) * 0.08) endX = start.x;
 
-        ctx.strokeStyle = hexToRgba(PenState.color, 0.2);
-        ctx.lineWidth = Math.max(8, exactSize * 2.1);
+        ctx.strokeStyle = hexToRgba(HighlighterState.color, HighlighterState.opacity);
+        ctx.lineWidth = Math.max(6, HighlighterState.size);
         ctx.lineCap = "butt";
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
@@ -1119,6 +1349,8 @@ if (typeof brushColor !== "undefined" && brushColor) {
     canvas.addEventListener("pointerup", stopDrawing);
     canvas.addEventListener("pointercancel", stopDrawing);
   }
+
+  let syncSurfaceScheduled = false;
 
   function syncSurfaceOverlays(enablePen) {
     const cursorCss = enablePen ? `url('${getCursorDataUrl()}') 8 8, crosshair` : "default";
@@ -1175,24 +1407,36 @@ if (typeof brushColor !== "undefined" && brushColor) {
         pdfCanvas.className = "pen-surface-canvas";
         pdfCanvas.width = targetW;
         pdfCanvas.height = targetH;
-        pdfCanvas.style.cssText = `position:absolute; top:0; left:0; width:${targetW}px; height:${targetH}px; z-index:45; touch-action:none;`;
+        pdfCanvas.style.cssText = `position:absolute; top:0; left:0; width:${targetW}px; height:${targetH}px; z-index:95; touch-action:none;`;
         renderTarget.appendChild(pdfCanvas);
-      } else if (
-        pdfCanvas &&
-        enablePen &&
-        (pdfCanvas.width <= 1 || pdfCanvas.height <= 1) &&
-        targetW > 1
-      ) {
-        pdfCanvas.width = targetW;
-        pdfCanvas.height = targetH;
-        pdfCanvas.style.width = `${targetW}px`;
-        pdfCanvas.style.height = `${targetH}px`;
+      } else if (pdfCanvas) {
+        if (
+          enablePen &&
+          targetW > 1 &&
+          targetH > 1 &&
+          (pdfCanvas.width <= 1 || pdfCanvas.height <= 1)
+        ) {
+          pdfCanvas.width = targetW;
+          pdfCanvas.height = targetH;
+        }
+        if (targetW > 1 && targetH > 1) {
+          pdfCanvas.style.width = `${targetW}px`;
+          pdfCanvas.style.height = `${targetH}px`;
+        }
+        pdfCanvas.style.zIndex = "95";
       }
 
       if (pdfCanvas) {
         bindSurfaceDrawing(pdfCanvas);
         pdfCanvas.style.pointerEvents = enablePen ? "auto" : "none";
         pdfCanvas.style.cursor = cursorCss;
+      }
+
+      const pdfHlCanvas = renderTarget.querySelector(".pen-highlighter-canvas");
+      if (pdfHlCanvas && targetW > 1 && targetH > 1) {
+        pdfHlCanvas.style.width = `${targetW}px`;
+        pdfHlCanvas.style.height = `${targetH}px`;
+        pdfHlCanvas.style.zIndex = "94";
       }
 
       const linkLayer = renderTarget.querySelector(".pdf-link-overlay-layer");
@@ -1202,16 +1446,33 @@ if (typeof brushColor !== "undefined" && brushColor) {
     }
   }
 
-  const surfaceObserver = new MutationObserver(() => {
-    if (PenState.isActive) {
-      syncSurfaceOverlays(true);
-    }
+  const surfaceObserver = new MutationObserver((mutations) => {
+    if (!PenState.isActive || syncSurfaceScheduled) return;
+    const isSelfOverlayMutation = mutations.every((m) =>
+      Array.from(m.addedNodes).concat(Array.from(m.removedNodes)).every(
+        (n) =>
+          n.nodeType === 1 &&
+          (n.classList?.contains("pen-surface-canvas") ||
+            n.classList?.contains("pen-highlighter-canvas"))
+      )
+    );
+    if (isSelfOverlayMutation) return;
+
+    syncSurfaceScheduled = true;
+    requestAnimationFrame(() => {
+      syncSurfaceScheduled = false;
+      if (PenState.isActive) {
+        syncSurfaceOverlays(true);
+      }
+    });
   });
   surfaceObserver.observe(document.body, { childList: true, subtree: true });
 
   window.applyPenSuiteSettings = function () {
     PenState.isActive = true;
     if (typeof window !== "undefined") window.activeTool = "pen";
+    const isHl = isHighlighterSelected();
+    HighlighterState.isActiveMode = isHl;
 
     if (typeof fabricCanvas !== "undefined" && fabricCanvas) {
       if (typeof fabricCanvas.calcOffset === "function") fabricCanvas.calcOffset();
@@ -1245,8 +1506,8 @@ if (typeof brushColor !== "undefined" && brushColor) {
         fabricCanvas.freeDrawingBrush = smoothBrush;
       } else if (PenState.type === "highlighter") {
         const hlBrush = createStraightHighlighterBrush(fabricCanvas);
-        hlBrush.color = hexToRgba(PenState.color, 0.22);
-        hlBrush.width = Math.max(8, exactSize * 2.1);
+        hlBrush.color = hexToRgba(HighlighterState.color, HighlighterState.opacity);
+        hlBrush.width = Math.max(6, HighlighterState.size);
         fabricCanvas.freeDrawingBrush = hlBrush;
       } else if (PenState.type === "fast-normal") {
         const fastNormal = createFastNormalBrush(fabricCanvas);
@@ -1270,6 +1531,7 @@ if (typeof brushColor !== "undefined" && brushColor) {
 
   window.deactivatePenSuite = function () {
     PenState.isActive = false;
+    HighlighterState.isActiveMode = false;
     mainBtn.classList.remove("active");
     if (flyout) flyout.style.display = "none";
     syncSurfaceOverlays(false);
@@ -1337,14 +1599,25 @@ if (typeof brushColor !== "undefined" && brushColor) {
       const val = parseInt(newVal, 10);
       if (isNaN(val)) return;
 
+      if (isHighlighterSelected()) {
+        HighlighterState.size = Math.max(6, Math.min(48, val));
+        if (hlSizeSlider) hlSizeSlider.value = String(HighlighterState.size);
+        if (hlSizeDisplay) hlSizeDisplay.textContent = `${HighlighterState.size}px`;
+        updatePenPreview();
+        if (typeof fabricCanvas !== "undefined" && fabricCanvas && fabricCanvas.freeDrawingBrush) {
+          fabricCanvas.freeDrawingBrush.width = Math.max(6, HighlighterState.size);
+        }
+        return;
+      }
+
       PenState.size = val;
       updatePenPreview();
 
       if (typeof fabricCanvas !== "undefined" && fabricCanvas && fabricCanvas.freeDrawingBrush) {
         fabricCanvas.freeDrawingBrush.width =
-          PenState.type === "highlighter"
-            ? Math.max(8, val * 2.1)
-            : PenState.type.startsWith("calligraphy") || PenState.type === "fast-en" || PenState.type === "fast-ur"
+          PenState.type.startsWith("calligraphy") ||
+          PenState.type === "fast-en" ||
+          PenState.type === "fast-ur"
             ? val * 1.8
             : val;
       }
@@ -1371,7 +1644,17 @@ if (typeof brushColor !== "undefined" && brushColor) {
     dot.addEventListener("click", () => {
       colorDots.forEach((d) => d.classList.remove("active"));
       dot.classList.add("active");
-      PenState.color = dot.getAttribute("data-color");
+      const chosenColor = dot.getAttribute("data-color");
+
+      if (isHighlighterSelected()) {
+        HighlighterState.color = chosenColor;
+        syncHighlighterUiValues();
+        updatePenPreview();
+        window.applyPenSuiteSettings();
+        return;
+      }
+
+      PenState.color = chosenColor;
       if (customColorInput) customColorInput.value = PenState.color;
       updatePenPreview();
       window.applyPenSuiteSettings();
@@ -1380,6 +1663,14 @@ if (typeof brushColor !== "undefined" && brushColor) {
 
   if (customColorInput) {
     customColorInput.addEventListener("input", (e) => {
+      if (isHighlighterSelected()) {
+        HighlighterState.color = e.target.value;
+        syncHighlighterUiValues();
+        updatePenPreview();
+        window.applyPenSuiteSettings();
+        return;
+      }
+
       colorDots.forEach((d) => d.classList.remove("active"));
       PenState.color = e.target.value;
       updatePenPreview();
@@ -1397,12 +1688,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const updateTriggerColor = (color) => {
     if (!color) return;
+    if (window.IqraHighlighterState && window.IqraHighlighterState.isActiveMode) return;
     triggerBtn.style.setProperty("background-color", color, "important");
   };
 
   document.querySelectorAll('#colorFlyoutMenu .color-btn, [id*="color"] [data-color]').forEach((btn) => {
     btn.addEventListener("click", (e) => {
-      const selectedColor = e.currentTarget.getAttribute("data-color") || e.currentTarget.style.backgroundColor;
+      const selectedColor =
+        e.currentTarget.getAttribute("data-color") || e.currentTarget.style.backgroundColor;
       updateTriggerColor(selectedColor);
     });
   });
@@ -1430,7 +1723,10 @@ document.addEventListener("DOMContentLoaded", () => {
     isPointerPressed = false;
     if (typeof fabricCanvas !== "undefined" && fabricCanvas && fabricCanvas._isCurrentlyDrawing) {
       fabricCanvas._isCurrentlyDrawing = false;
-      if (fabricCanvas.freeDrawingBrush && typeof fabricCanvas.freeDrawingBrush.onMouseUp === "function") {
+      if (
+        fabricCanvas.freeDrawingBrush &&
+        typeof fabricCanvas.freeDrawingBrush.onMouseUp === "function"
+      ) {
         try {
           fabricCanvas.freeDrawingBrush.onMouseUp();
         } catch (err) {}
